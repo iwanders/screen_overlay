@@ -3,6 +3,9 @@ use windows::{
     Win32::System::LibraryLoader::GetModuleHandleA, Win32::UI::WindowsAndMessaging::*,
 };
 
+// https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
+// https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
+
 pub fn main() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleA(None)?;
@@ -23,11 +26,12 @@ pub fn main() -> Result<()> {
         let atom = RegisterClassA(&wc);
         debug_assert!(atom != 0);
 
-        CreateWindowExA(
+        let hwnd = CreateWindowExA(
             WINDOW_EX_STYLE::default(),
             window_class,
             s!("This is a sample window"),
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -37,6 +41,11 @@ pub fn main() -> Result<()> {
             instance,
             None,
         );
+
+        let extended_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
+        println!("GWL_EXSTYLE: {:?}", GWL_EXSTYLE);
+        println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
+        SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32);
 
         let mut message = MSG::default();
 
