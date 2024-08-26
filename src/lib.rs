@@ -73,9 +73,9 @@ pub fn main() -> Result<()> {
             if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             // WS_POPUP | WS_VISIBLE,
-            // WS_VISIBLE,
+            WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             // https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12HelloWorld/src/HelloWindow/Win32Application.cpp
@@ -94,7 +94,7 @@ pub fn main() -> Result<()> {
         // SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
         SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
 
-	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0), 255, LWA_ALPHA);
+	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 128, LWA_COLORKEY);
 
         setup_gdi()?;
         // let mut graphics: GpGraphics = Default::default();
