@@ -3,13 +3,15 @@ use windows::{
     Win32::System::LibraryLoader::GetModuleHandleA, Win32::UI::WindowsAndMessaging::*,
 };
 
+// use windows::Win32::Graphics::GdiPlus::GdipCreateFromHWND;
+
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
 pub fn main() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleA(None)?;
-        debug_assert!(instance.0 != 0);
+        debug_assert!(!instance.0.is_null());
 
         let window_class = s!("window");
 
@@ -26,10 +28,11 @@ pub fn main() -> Result<()> {
         let atom = RegisterClassA(&wc);
         debug_assert!(atom != 0);
 
+        const WINDOW_TRANSPARENT: bool = false;
+
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(
-            WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE, // | WINDOW_EX_STYLE::default(),
-            // WINDOW_EX_STYLE::default(),
+            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
             // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
@@ -37,19 +40,22 @@ pub fn main() -> Result<()> {
             WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
+            // https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12HelloWorld/src/HelloWindow/Win32Application.cpp
+            CW_USEDEFAULT, // windowRect.right - windowRect.left, perhaps?
+            CW_USEDEFAULT, // windowRect.bottom - windowRect.top, perhaps?
             None,
             None,
             instance,
             None,
-        );
+        )?;
 
         let extended_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
         println!("GWL_EXSTYLE: {:?}", GWL_EXSTYLE);
         println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
         // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
         //SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+
+        //let gdip = GdipCreateFromHWND(hwnd)?;
 
         let mut message = MSG::default();
 
