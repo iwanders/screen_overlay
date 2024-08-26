@@ -98,7 +98,7 @@ pub fn main() -> Result<()> {
         let gdip = GdipCreateFromHWND(hwnd, &mut graphics);
 
         let mut pen: *mut GpPen = std::ptr::null_mut();
-        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000, 3.0, windows::Win32::Graphics::GdiPlus::Unit(0), &mut pen);
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000FF, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut pen);
         windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, pen, 0.0, 0.0, 100.0, 100.0);
         let mut message = MSG::default();
 
