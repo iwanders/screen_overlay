@@ -3,12 +3,49 @@ use windows::{
     Win32::System::LibraryLoader::GetModuleHandleA, Win32::UI::WindowsAndMessaging::*,
 };
 
-// use windows::Win32::Graphics::GdiPlus::GdipCreateFromHWND;
+use windows::Win32::Graphics::GdiPlus::{GdipCreateFromHWND, GpGraphics, GpPen};
 
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
+
+
+// Do we need:
+// https://github.com/microsoft/windows-rs/issues/2737#issuecomment-1852174020
+pub fn setup_gdi() -> Result<()> {
+    use core::mem::MaybeUninit;
+
+    use windows::{
+        // core::Result,
+        Win32::Graphics::GdiPlus::{self, GdiplusStartup, GdiplusStartupInput},
+    };
+
+    let mut token = MaybeUninit::uninit();
+    let mut output = MaybeUninit::uninit();
+
+    let status = unsafe {
+        GdiplusStartup(
+            token.as_mut_ptr(),
+            &GdiplusStartupInput {
+                GdiplusVersion: 1,
+                ..Default::default()
+            },
+            output.as_mut_ptr(),
+        )
+    };
+
+    // assert_eq!(status, GdiPlus::Ok);
+    if (status == GdiPlus::Ok) {
+        Ok(())
+    } else {
+        panic!("cant figure out how to make a string error, sort out later")
+       // Err("something went wrong")
+    }
+}
+
+
 pub fn main() -> Result<()> {
+
     unsafe {
         let instance = GetModuleHandleA(None)?;
         debug_assert!(!instance.0.is_null());
@@ -55,8 +92,14 @@ pub fn main() -> Result<()> {
         // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
         //SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
 
-        //let gdip = GdipCreateFromHWND(hwnd)?;
+        setup_gdi()?;
+        // let mut graphics: GpGraphics = Default::default();
+        let mut graphics: *mut GpGraphics = std::ptr::null_mut();
+        let gdip = GdipCreateFromHWND(hwnd, &mut graphics);
 
+        let mut pen: *mut GpPen = std::ptr::null_mut();
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000, 3.0, windows::Win32::Graphics::GdiPlus::Unit(0), &mut pen);
+        windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, pen, 0.0, 0.0, 100.0, 100.0);
         let mut message = MSG::default();
 
         while GetMessageA(&mut message, None, 0, 0).into() {
