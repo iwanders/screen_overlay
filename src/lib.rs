@@ -65,16 +65,17 @@ pub fn main() -> Result<()> {
         let atom = RegisterClassA(&wc);
         debug_assert!(atom != 0);
 
-        const WINDOW_TRANSPARENT: bool = false;
+        const WINDOW_TRANSPARENT: bool = true;
 
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(
+            // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
             if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
-            // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             // WS_POPUP | WS_VISIBLE,
-            WS_VISIBLE,
+            // WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             // https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12HelloWorld/src/HelloWindow/Win32Application.cpp
@@ -90,7 +91,10 @@ pub fn main() -> Result<()> {
         println!("GWL_EXSTYLE: {:?}", GWL_EXSTYLE);
         println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
         // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
-        //SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+        // SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+        SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+
+	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0), 255, LWA_ALPHA);
 
         setup_gdi()?;
         // let mut graphics: GpGraphics = Default::default();
