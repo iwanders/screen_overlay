@@ -104,16 +104,28 @@ pub fn main() -> Result<()> {
 
         // UpdateLayeredWindow must happen PRIOR to set layered window attributes; https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow
         // see https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes#remarks
-	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 128, LWA_COLORKEY);
+	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 255, LWA_COLORKEY);
 
         setup_gdi()?;
         // let mut graphics: GpGraphics = Default::default();
         let mut graphics: *mut GpGraphics = std::ptr::null_mut();
         let gdip = GdipCreateFromHWND(hwnd, &mut graphics);
 
-        let mut pen: *mut GpPen = std::ptr::null_mut();
-        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000FF, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut pen);
-        windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, pen, 0.0, 0.0, 100.0, 100.0);
+        // let mut white_pen: *mut GpPen = std::ptr::null_mut();
+        // windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFFFFFFFF, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut white_pen);
+        // let white_brush = windows::Win32::Graphics::Gdi::CreateSolidBrush(0xFFFFFFFF);
+        // windows::Win32::Graphics::GdiPlus::GdipFillRectangle(graphics, 
+        // windows::Win32::Graphics::Gdi::SetBkColor(windows::Win32::Graphics::Gdi::GetDC(hwnd), windows::Win32::Foundation::COLORREF(0xFF_FF_FF_FF));
+        // windows::Win32::Graphics::Gdi::SetBkMode(windows::Win32::Graphics::Gdi::GetDC(hwnd), windows::Win32::Graphics::Gdi::OPAQUE);
+
+        let mut white_pen: *mut GpPen = std::ptr::null_mut();
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFFFFFFFF, 300000.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut white_pen);
+        windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, white_pen, 0.0, 0.0, 1920.0, 1080.0);
+
+        let mut blue_pen: *mut GpPen = std::ptr::null_mut();
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000FF, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut blue_pen);
+        windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, blue_pen, 0.0, 0.0, 100.0, 100.0);
+
         let mut message = MSG::default();
 
         while GetMessageA(&mut message, None, 0, 0).into() {
