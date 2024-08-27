@@ -5,6 +5,10 @@ use windows::{
 
 use windows::Win32::Graphics::GdiPlus::{GdipCreateFromHWND, GpGraphics, GpPen};
 
+/*
+How do we make transparent pixels in our new overlay? Just specifying transparency does not work.
+*/
+
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
@@ -102,9 +106,12 @@ pub fn main() -> Result<()> {
         println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
         // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
         // SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+
+        /*
         let extended_style = extended_style &  (!(WS_EX_DLGMODALFRAME.0 | WS_EX_CLIENTEDGE.0 | WS_EX_STATICEDGE.0));
         let extended_style = extended_style | WS_EX_TRANSPARENT.0 | WS_EX_TOPMOST.0 | WS_EX_LAYERED.0;
         SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style as i32);
+        */
 
         // If it is a popup, we need to manually set the size.
         // let hdc = GetDC();
