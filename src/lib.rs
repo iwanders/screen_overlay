@@ -8,7 +8,8 @@ use windows::Win32::Graphics::GdiPlus::{GdipCreateFromHWND, GpGraphics, GpPen};
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
-
+// Perhaps helpful:
+// https://stackoverflow.com/a/3971732
 
 // Do we need:
 // https://github.com/microsoft/windows-rs/issues/2737#issuecomment-1852174020
@@ -70,30 +71,39 @@ pub fn main() -> Result<()> {
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(
             // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
-            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
+            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE } else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
             // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            // WS_POPUP | WS_VISIBLE,
-            WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
+            WS_POPUP | WS_VISIBLE,
+            // WS_VISIBLE,
+            // WS_VISIBLE | WS_DLGFRAME,
+            0,
+            0,
             // https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12HelloWorld/src/HelloWindow/Win32Application.cpp
-            CW_USEDEFAULT, // windowRect.right - windowRect.left, perhaps?
-            CW_USEDEFAULT, // windowRect.bottom - windowRect.top, perhaps?
+            1920, // windowRect.right - windowRect.left, perhaps?
+            1080, // windowRect.bottom - windowRect.top, perhaps?
             None,
             None,
             instance,
             None,
         )?;
 
-        let extended_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
+        let extended_style = GetWindowLongA(hwnd, GWL_EXSTYLE) as u32;
         println!("GWL_EXSTYLE: {:?}", GWL_EXSTYLE);
         println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
         // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
         // SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
-        SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_TOPMOST.0 as i32 | WS_EX_LAYERED.0 as i32);
+        let extended_style = extended_style &  (!(WS_EX_DLGMODALFRAME.0 | WS_EX_CLIENTEDGE.0 | WS_EX_STATICEDGE.0));
+        let extended_style = extended_style | WS_EX_TRANSPARENT.0 | WS_EX_TOPMOST.0 | WS_EX_LAYERED.0;
+        SetWindowLongA(hwnd, GWL_EXSTYLE, extended_style as i32);
 
+        // If it is a popup, we need to manually set the size.
+        // let hdc = GetDC();
+        // UpdateLayeredWindow(hwnd, hdc);
+
+        // UpdateLayeredWindow must happen PRIOR to set layered window attributes; https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow
+        // see https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes#remarks
 	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 128, LWA_COLORKEY);
 
         setup_gdi()?;
