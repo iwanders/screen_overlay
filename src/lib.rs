@@ -45,6 +45,14 @@ pub fn setup_gdi() -> Result<()> {
 }
 
 
+fn rgb(r: u8, g: u8, b: u8) -> windows::Win32::Foundation::COLORREF {
+    windows::Win32::Foundation::COLORREF((r as u32) << 16 | (g as u32) << 8 | b as u32)
+}
+
+fn rgba(r: u8, g: u8, b: u8, a: u8) -> windows::Win32::Foundation::COLORREF {
+    windows::Win32::Foundation::COLORREF((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
+}
+
 pub fn main() -> Result<()> {
 
     unsafe {
@@ -104,7 +112,7 @@ pub fn main() -> Result<()> {
 
         // UpdateLayeredWindow must happen PRIOR to set layered window attributes; https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow
         // see https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes#remarks
-	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 255, LWA_COLORKEY);
+	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0xFF_FF_FF_FF), 255, LWA_COLORKEY);
 
         setup_gdi()?;
         // let mut graphics: GpGraphics = Default::default();
@@ -123,7 +131,8 @@ pub fn main() -> Result<()> {
         windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, white_pen, 0.0, 0.0, 1920.0, 1080.0);
 
         let mut blue_pen: *mut GpPen = std::ptr::null_mut();
-        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF0000FF, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut blue_pen);
+        let color = rgba(0, 0, 0xff, 0x20);
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(color.0, 3.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut blue_pen);
         windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, blue_pen, 0.0, 0.0, 100.0, 100.0);
 
         let mut message = MSG::default();
