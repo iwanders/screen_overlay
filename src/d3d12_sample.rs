@@ -9,6 +9,9 @@ use windows::{
 
 use std::mem::transmute;
 
+
+const ENABLE_DEBUG: bool = true;
+
 trait DXSample {
     fn new(command_line: &SampleCommandLine) -> Result<Self>
     where
@@ -294,7 +297,7 @@ mod d3d12_hello_triangle {
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 // SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                // AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
+                AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
                 SampleDesc: DXGI_SAMPLE_DESC {
                     Count: 1,
                     ..Default::default()
@@ -528,16 +531,17 @@ mod d3d12_hello_triangle {
     }
 
     fn create_device(command_line: &SampleCommandLine) -> Result<(IDXGIFactory4, ID3D12Device)> {
-        if cfg!(debug_assertions) {
+        let mut debug: Option<ID3D12Debug> = None;
+        if ENABLE_DEBUG {
             unsafe {
-                let mut debug: Option<ID3D12Debug> = None;
                 if let Some(debug) = D3D12GetDebugInterface(&mut debug).ok().and(debug) {
+                    println!("Enabling debug");
                     debug.EnableDebugLayer();
                 }
             }
         }
 
-        let dxgi_factory_flags = if cfg!(debug_assertions) {
+        let dxgi_factory_flags = if ENABLE_DEBUG {
             DXGI_CREATE_FACTORY_DEBUG
         } else {
             DXGI_CREATE_FACTORY_FLAGS(0)
@@ -584,7 +588,7 @@ mod d3d12_hello_triangle {
         device: &ID3D12Device,
         root_signature: &ID3D12RootSignature,
     ) -> Result<ID3D12PipelineState> {
-        let compile_flags = if cfg!(debug_assertions) {
+        let compile_flags = if ENABLE_DEBUG {
             D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION
         } else {
             0
@@ -818,17 +822,6 @@ mod d3d12_hello_triangle {
 
 
 pub fn main() -> Result<()> {
-    let mut dxgi_factory_flag : DXGI_CREATE_FACTORY_FLAGS = DXGI_CREATE_FACTORY_FLAGS::default();
-
-    // enable debug layer
-    let mut debug_controller : Option<ID3D12Debug> = None;
-    if let Ok(()) = unsafe {D3D12GetDebugInterface(&mut debug_controller)}
-    {
-        unsafe {debug_controller.as_ref().unwrap().EnableDebugLayer()};
-        dxgi_factory_flag = dxgi_factory_flag | DXGI_CREATE_FACTORY_DEBUG;
-    }
-
-
     run_sample::<d3d12_hello_triangle::Sample>()?;
 
     Ok(())
