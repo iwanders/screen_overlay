@@ -287,7 +287,7 @@ mod d3d12_hello_triangle {
                 BufferCount: FRAME_COUNT,
                 Width: width as u32,
                 Height: height as u32,
-                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM, // seems to have alpha?
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 SampleDesc: DXGI_SAMPLE_DESC {
@@ -484,7 +484,8 @@ mod d3d12_hello_triangle {
         unsafe {
             command_list.ClearRenderTargetView(
                 rtv_handle,
-                &[0.0_f32, 0.2_f32, 0.4_f32, 1.0_f32],
+                // &[0.0_f32, 0.2_f32, 0.4_f32, 1.0_f32],
+                &[0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32], // rgba, alpha doesn't do anything
                 None,
             );
             command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
