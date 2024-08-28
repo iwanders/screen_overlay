@@ -109,8 +109,20 @@ where
         )
     }?;
 
+    unsafe {
+        use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea};
+        use windows::Win32::UI::Controls::MARGINS;
+        let margin = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
+        DwmExtendFrameIntoClientArea(hwnd, &margin);
+    }
     sample.bind_to_window(&hwnd)?;
     unsafe { _ = ShowWindow(hwnd, SW_SHOW) };
+
 
     loop {
         let mut message = MSG::default();

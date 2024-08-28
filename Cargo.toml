@@ -30,6 +30,9 @@ features = [
     "Win32_Graphics_Direct3D12",
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm", # for DwmExtendFrameIntoClientArea
+    "Win32_UI_Controls", # for DwmExtendFrameIntoClientArea
+    "Win32_UI", # for DwmExtendFrameIntoClientArea
     "Win32_Security",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
