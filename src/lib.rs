@@ -10,6 +10,10 @@ How do we make transparent pixels in our new overlay? Just specifying transparen
 
 Looks like gdi just doesn't support alpha, gdi+ seems to?
 https://stackoverflow.com/a/35957469
+
+
+https://stackoverflow.com/a/22220021
+perhaps we need a whole d3d swapchain, and then that magic DwmExtendFrameIntoClientArea function?
 */
 
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
@@ -86,7 +90,7 @@ pub fn main() -> Result<()> {
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(
             // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
-            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT   } else {WINDOW_EX_STYLE::default()},
+            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE } else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
             // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
@@ -125,6 +129,7 @@ pub fn main() -> Result<()> {
 	SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0x00_FF_FF_FF), 255, LWA_COLORKEY);
 	// SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0xFF_FF_FF_FF), 128, LWA_ALPHA);
 
+
         setup_gdi()?;
         // let mut graphics: GpGraphics = Default::default();
         let mut graphics: *mut GpGraphics = std::ptr::null_mut();
@@ -138,7 +143,7 @@ pub fn main() -> Result<()> {
         // windows::Win32::Graphics::Gdi::SetBkMode(windows::Win32::Graphics::Gdi::GetDC(hwnd), windows::Win32::Graphics::Gdi::OPAQUE);
 
         let mut white_pen: *mut GpPen = std::ptr::null_mut();
-        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0x00_FF_FF_FF, 300000.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut white_pen);
+        windows::Win32::Graphics::GdiPlus::GdipCreatePen1(0xFF_FF_FF_FF, 300000.0, windows::Win32::Graphics::GdiPlus::UnitPixel, &mut white_pen);
         windows::Win32::Graphics::GdiPlus::GdipDrawLine(graphics, white_pen, 0.0, 0.0, 1920.0, 1080.0);
 
         let mut blue_pen: *mut GpPen = std::ptr::null_mut();
