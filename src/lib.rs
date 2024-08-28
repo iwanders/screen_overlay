@@ -16,6 +16,8 @@ https://stackoverflow.com/a/22220021
 perhaps we need a whole d3d swapchain, and then that magic DwmExtendFrameIntoClientArea function?
 */
 
+
+mod d3d12_sample;
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
@@ -65,7 +67,7 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> windows::Win32::Foundation::COLORREF {
 }
 
 pub fn main() -> Result<()> {
-
+    return d3d12_sample::main();
     unsafe {
         let instance = GetModuleHandleA(None)?;
         debug_assert!(!instance.0.is_null());
