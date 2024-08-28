@@ -297,7 +297,7 @@ mod d3d12_hello_triangle {
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 // SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
+                // AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
                 SampleDesc: DXGI_SAMPLE_DESC {
                     Count: 1,
                     ..Default::default()
@@ -537,17 +537,19 @@ mod d3d12_hello_triangle {
                 if let Some(debug) = D3D12GetDebugInterface(&mut debug).ok().and(debug) {
                     println!("Enabling debug");
                     debug.EnableDebugLayer();
+                } else {
+                    panic!("Failed to get debug interface");
                 }
             }
         }
 
         let dxgi_factory_flags = if ENABLE_DEBUG {
-            DXGI_CREATE_FACTORY_DEBUG
+            DXGI_CREATE_FACTORY_DEBUG | DXGI_CREATE_FACTORY_FLAGS::default()
         } else {
-            DXGI_CREATE_FACTORY_FLAGS(0)
+            DXGI_CREATE_FACTORY_FLAGS(0) | DXGI_CREATE_FACTORY_FLAGS::default()
         };
 
-        let dxgi_factory: IDXGIFactory4 = unsafe { CreateDXGIFactory2(dxgi_factory_flags) }?;
+        let dxgi_factory: IDXGIFactory4 = unsafe { CreateDXGIFactory2::<IDXGIFactory4>(dxgi_factory_flags) }?;
 
         let adapter = if command_line.use_warp_device {
             unsafe { dxgi_factory.EnumWarpAdapter() }
@@ -556,7 +558,7 @@ mod d3d12_hello_triangle {
         }?;
 
         let mut device: Option<ID3D12Device> = None;
-        unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, &mut device) }?;
+        unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_1, &mut device) }?;
         Ok((dxgi_factory, device.unwrap()))
     }
 
