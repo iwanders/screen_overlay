@@ -109,17 +109,20 @@ where
         )
     }?;
 
-    unsafe {
-        use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea};
-        use windows::Win32::UI::Controls::MARGINS;
-        let margin = MARGINS {
-            cxLeftWidth: -1,
-            cxRightWidth: -1,
-            cyTopHeight: -1,
-            cyBottomHeight: -1,
-        };
-        DwmExtendFrameIntoClientArea(hwnd, &margin);
+    if true {
+        unsafe {
+            use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea};
+            use windows::Win32::UI::Controls::MARGINS;
+            let margin = MARGINS {
+                cxLeftWidth: -1,
+                cxRightWidth: -1,
+                cyTopHeight: -1,
+                cyBottomHeight: -1,
+            };
+            DwmExtendFrameIntoClientArea(hwnd, &margin);
+        }
     }
+
     sample.bind_to_window(&hwnd)?;
     unsafe { _ = ShowWindow(hwnd, SW_SHOW) };
 
@@ -290,6 +293,8 @@ mod d3d12_hello_triangle {
                 Format: DXGI_FORMAT_R8G8B8A8_UNORM, // seems to have alpha?
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                // SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                // AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
                 SampleDesc: DXGI_SAMPLE_DESC {
                     Count: 1,
                     ..Default::default()
@@ -810,7 +815,20 @@ mod d3d12_hello_triangle {
     }
 }
 
+
+
 pub fn main() -> Result<()> {
+    let mut dxgi_factory_flag : DXGI_CREATE_FACTORY_FLAGS = DXGI_CREATE_FACTORY_FLAGS::default();
+
+    // enable debug layer
+    let mut debug_controller : Option<ID3D12Debug> = None;
+    if let Ok(()) = unsafe {D3D12GetDebugInterface(&mut debug_controller)}
+    {
+        unsafe {debug_controller.as_ref().unwrap().EnableDebugLayer()};
+        dxgi_factory_flag = dxgi_factory_flag | DXGI_CREATE_FACTORY_DEBUG;
+    }
+
+
     run_sample::<d3d12_hello_triangle::Sample>()?;
 
     Ok(())
