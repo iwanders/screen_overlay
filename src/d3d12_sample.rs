@@ -87,12 +87,17 @@ where
 
     title.push('\0');
 
+
+    const WINDOW_TRANSPARENT: bool = true;
+
+    // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
     let hwnd = unsafe {
         CreateWindowExA(
-            WINDOW_EX_STYLE::default(),
+            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_COMPOSITED } else {WINDOW_EX_STYLE::default()},
             s!("RustWindowClass"),
             PCSTR(title.as_ptr()),
-            WS_OVERLAPPEDWINDOW,
+            // WS_OVERLAPPEDWINDOW,
+            WS_POPUP,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             window_rect.right - window_rect.left,
