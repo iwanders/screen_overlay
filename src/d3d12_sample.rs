@@ -20,7 +20,7 @@ trait DXSample {
     fn bind_to_window(&mut self, hwnd: &HWND) -> Result<()>;
 
     fn update(&mut self) {}
-    fn render(&mut self) {}
+    fn render(&mut self) -> Result<()> {Ok(())}
     fn on_key_up(&mut self, _key: u8) {}
     fn on_key_down(&mut self, _key: u8) {}
 
@@ -160,7 +160,9 @@ fn sample_wndproc<S: DXSample>(sample: &mut S, message: u32, wparam: WPARAM) -> 
         }
         WM_PAINT => {
             sample.update();
-            sample.render();
+            if let Err(e) = sample.render() {
+                println!("Something went very wrong: {e:?}");
+            }
             true
         }
         _ => false,
@@ -186,6 +188,7 @@ extern "system" fn wndproc<S: DXSample>(
             LRESULT::default()
         }
         _ => {
+            // println!("somethiung");
             let user_data = unsafe { GetWindowLongPtrA(window, GWLP_USERDATA) };
             let sample = std::ptr::NonNull::<S>::new(user_data as _);
             let handled = sample.map_or(false, |mut s| {
@@ -241,6 +244,7 @@ mod d3d12_hello_triangle {
         dxgi_factory: IDXGIFactory4,
         device: ID3D12Device,
         resources: Option<Resources>,
+        info_queue: Option<ID3D12InfoQueue>,
     }
 
     struct Resources {
@@ -272,10 +276,12 @@ mod d3d12_hello_triangle {
         fn new(command_line: &SampleCommandLine) -> Result<Self> {
             let (dxgi_factory, device) = create_device(command_line)?;
 
+            let info_queue: ID3D12InfoQueue = (&device).cast()?;
             Ok(Sample {
                 dxgi_factory,
                 device,
                 resources: None,
+                info_queue: Some(info_queue),
             })
         }
 
@@ -431,7 +437,32 @@ mod d3d12_hello_triangle {
             (1280, 720)
         }
 
-        fn render(&mut self) {
+        fn render(&mut self)  -> Result<()> {
+            if let Some(q) = &self.info_queue {
+                unsafe {
+                    // q.AddApplicationMessage(D3D12_MESSAGE_SEVERITY(0), s!("hello"))?;
+                    for id in 0..q.GetNumStoredMessages() {
+                        // Two calls according to https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/nf-d3d12sdklayers-id3d12infoqueue-getmessage
+                        // first obtain the length, then do it again for the data.
+
+                        let mut msg_len = 0;
+                        q.GetMessage(id, None, &mut msg_len)?;                    
+                        // Then, allocate the memory, do a reinterpret cast on it, get the msg and print it.
+                        let mut msg_data = vec![0u8; msg_len];
+                        let msg_ptr = std::mem::transmute::<*mut u8, *mut D3D12_MESSAGE>(msg_data.as_mut_ptr());
+                        // typedef struct D3D12_MESSAGE {
+                        // D3D12_MESSAGE_CATEGORY Category;
+                        // D3D12_MESSAGE_SEVERITY Severity;
+                        // D3D12_MESSAGE_ID       ID;
+                        // const char             *pDescription;
+                        // SIZE_T                 DescriptionByteLength;
+                        // } D3D12_MESSAGE;
+                        q.GetMessage(id, Some(msg_ptr), &mut msg_len)?;
+                        println!("{},{}: {}", (*msg_ptr).Category.0, (*msg_ptr).Severity.0, PCSTR::from_raw((*msg_ptr).pDescription).display());
+                    }
+                    q.ClearStoredMessages();
+                }
+            }
             if let Some(resources) = &mut self.resources {
                 populate_command_list(resources).unwrap();
 
@@ -446,6 +477,7 @@ mod d3d12_hello_triangle {
 
                 wait_for_previous_frame(resources);
             }
+            Ok(())
         }
     }
 
@@ -560,16 +592,19 @@ mod d3d12_hello_triangle {
         let mut device: Option<ID3D12Device> = None;
         unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_1, &mut device) }?;
         // let v = device.unwrap();
-        unsafe {
-            // use windows::Win32::Graphics::Direct3D12::ID3D12InfoQueue_Impl;
-            // https://github.com/curldivergence/rusty-d3d12/blob/131ad29d8cb57258071e90d8a7944131aa5faab2/src/lib.rs#L12
-            // states: please note that `debug_callback` feature needs to be activated explicitly since `ID3D12InfoQueue1` interface is only supported on Windows 11
-            let queue : ID3D12InfoQueue1  = device.as_ref().unwrap().cast::<ID3D12InfoQueue1>()?;
-            unsafe extern "system" fn callback_fun(category: D3D12_MESSAGE_CATEGORY , severity: D3D12_MESSAGE_SEVERITY, id: D3D12_MESSAGE_ID , description: PCSTR, context: *mut std::ffi::c_void){
-                println!("zzzzz");
+        const HAVE_INFOQUEUE1: bool = false; // only for win 11?
+        if HAVE_INFOQUEUE1 {
+            unsafe {
+                // use windows::Win32::Graphics::Direct3D12::ID3D12InfoQueue_Impl;
+                // https://github.com/curldivergence/rusty-d3d12/blob/131ad29d8cb57258071e90d8a7944131aa5faab2/src/lib.rs#L12
+                // states: please note that `debug_callback` feature needs to be activated explicitly since `ID3D12InfoQueue1` interface is only supported on Windows 11
+                let queue : ID3D12InfoQueue1  = device.as_ref().unwrap().cast::<ID3D12InfoQueue1>()?;
+                unsafe extern "system" fn callback_fun(category: D3D12_MESSAGE_CATEGORY , severity: D3D12_MESSAGE_SEVERITY, id: D3D12_MESSAGE_ID , description: PCSTR, context: *mut std::ffi::c_void){
+                    println!("zzzzz");
+                }
+                println!("Going into register");
+                queue.RegisterMessageCallback(Some(callback_fun), D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, std::ptr::null_mut(), std::ptr::null_mut());
             }
-            println!("Going into register");
-            queue.RegisterMessageCallback(Some(callback_fun), D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, std::ptr::null_mut(), std::ptr::null_mut());
         }
         Ok((dxgi_factory, device.unwrap()))
     }
