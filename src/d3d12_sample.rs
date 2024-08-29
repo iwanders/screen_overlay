@@ -559,6 +559,18 @@ mod d3d12_hello_triangle {
 
         let mut device: Option<ID3D12Device> = None;
         unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_1, &mut device) }?;
+        // let v = device.unwrap();
+        unsafe {
+            // use windows::Win32::Graphics::Direct3D12::ID3D12InfoQueue_Impl;
+            // https://github.com/curldivergence/rusty-d3d12/blob/131ad29d8cb57258071e90d8a7944131aa5faab2/src/lib.rs#L12
+            // states: please note that `debug_callback` feature needs to be activated explicitly since `ID3D12InfoQueue1` interface is only supported on Windows 11
+            let queue : ID3D12InfoQueue1  = device.as_ref().unwrap().cast::<ID3D12InfoQueue1>()?;
+            unsafe extern "system" fn callback_fun(category: D3D12_MESSAGE_CATEGORY , severity: D3D12_MESSAGE_SEVERITY, id: D3D12_MESSAGE_ID , description: PCSTR, context: *mut std::ffi::c_void){
+                println!("zzzzz");
+            }
+            println!("Going into register");
+            queue.RegisterMessageCallback(Some(callback_fun), D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, std::ptr::null_mut(), std::ptr::null_mut());
+        }
         Ok((dxgi_factory, device.unwrap()))
     }
 

@@ -14,6 +14,11 @@ https://stackoverflow.com/a/35957469
 
 https://stackoverflow.com/a/22220021
 perhaps we need a whole d3d swapchain, and then that magic DwmExtendFrameIntoClientArea function?
+
+debug print issues perhaps similar to 
+https://github.com/EasyJellySniper/RustD3D12/blob/ce0c05e51188f7c41b8fbef1d36bdc2c594bbbb0/src/hello_world_triangle.rs
+https://www.gamedev.net/blogs/entry/2294005-implement-d3d12-with-the-rust/
+
 */
 
 
