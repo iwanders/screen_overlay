@@ -7,6 +7,12 @@ use windows::{
     Win32::UI::WindowsAndMessaging::*,
 };
 
+// Oh, this seems to do pretty much what we want?
+// https://learn.microsoft.com/en-us/windows/win32/directcomp/initialize-directcomposition
+// but we run into problems on step 2... getting that dxgidevice from the d3d12 context
+// https://stackoverflow.com/a/40427079
+// https://github.com/PJayB/DirectCompositionDirectX12Sample
+
 use std::mem::transmute;
 
 
@@ -123,6 +129,16 @@ where
                 cyBottomHeight: -1,
             };
             DwmExtendFrameIntoClientArea(hwnd, &margin);
+        }
+    }
+
+    // Do some DWM composition magic.
+    if true {
+        unsafe {
+            use windows::Win32::Graphics::Dwm::*;
+            // let z = WINDOWCOMPOSITIONATTRIBDATA{
+            // };
+            DwmSetWindowAttribute (hwnd, DWMWA_CLOAK, std::ptr::null(), 0);
         }
     }
 
@@ -245,6 +261,7 @@ mod d3d12_hello_triangle {
         device: ID3D12Device,
         resources: Option<Resources>,
         info_queue: Option<ID3D12InfoQueue>,
+        dxgi_adapter: Option<IDXGIAdapter1>,
     }
 
     struct Resources {
@@ -274,14 +291,15 @@ mod d3d12_hello_triangle {
 
     impl DXSample for Sample {
         fn new(command_line: &SampleCommandLine) -> Result<Self> {
-            let (dxgi_factory, device) = create_device(command_line)?;
-
+            let (adapter, dxgi_factory, device) = create_device(command_line)?;
+            
             let info_queue: ID3D12InfoQueue = (&device).cast()?;
             Ok(Sample {
                 dxgi_factory,
                 device,
                 resources: None,
                 info_queue: Some(info_queue),
+                dxgi_adapter: Some(adapter),
             })
         }
 
@@ -292,6 +310,10 @@ mod d3d12_hello_triangle {
                     ..Default::default()
                 })?
             };
+
+            if let Some(v) = &self.dxgi_adapter {
+                // let dv: IDXGIDevice = v.cast()?;
+            }
 
             let (width, height) = self.window_size();
 
@@ -522,12 +544,15 @@ mod d3d12_hello_triangle {
 
         // Record commands.
         unsafe {
+            /*
+            */
             command_list.ClearRenderTargetView(
                 rtv_handle,
                 // &[0.0_f32, 0.2_f32, 0.4_f32, 1.0_f32],
-                &[0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32], // rgba, alpha doesn't do anything
+                &[0.0_f32, 0.2_f32, 0.0_f32, 0.5_f32], // rgba, alpha doesn't do anything
                 None,
             );
+
             command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             command_list.IASetVertexBuffers(0, Some(&[resources.vbv]));
             command_list.DrawInstanced(3, 1, 0, 0);
@@ -562,7 +587,7 @@ mod d3d12_hello_triangle {
         }
     }
 
-    fn create_device(command_line: &SampleCommandLine) -> Result<(IDXGIFactory4, ID3D12Device)> {
+    fn create_device(command_line: &SampleCommandLine) -> Result<(IDXGIAdapter1, IDXGIFactory4, ID3D12Device)> {
         let mut debug: Option<ID3D12Debug> = None;
         if ENABLE_DEBUG {
             unsafe {
@@ -583,11 +608,13 @@ mod d3d12_hello_triangle {
 
         let dxgi_factory: IDXGIFactory4 = unsafe { CreateDXGIFactory2::<IDXGIFactory4>(dxgi_factory_flags) }?;
 
-        let adapter = if command_line.use_warp_device {
+        let adapter /* : Dxgi::IDXGIAdapter1 */ = if command_line.use_warp_device {
             unsafe { dxgi_factory.EnumWarpAdapter() }
         } else {
             get_hardware_adapter(&dxgi_factory)
         }?;
+
+        // Okay, adapter perhaps is that dxgi device? yep it is; Dxgi::IDXGIAdapter1
 
         let mut device: Option<ID3D12Device> = None;
         unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_1, &mut device) }?;
@@ -606,7 +633,7 @@ mod d3d12_hello_triangle {
                 queue.RegisterMessageCallback(Some(callback_fun), D3D12_MESSAGE_CALLBACK_IGNORE_FILTERS, std::ptr::null_mut(), std::ptr::null_mut());
             }
         }
-        Ok((dxgi_factory, device.unwrap()))
+        Ok((adapter, dxgi_factory, device.unwrap()))
     }
 
     fn create_root_signature(device: &ID3D12Device) -> Result<ID3D12RootSignature> {
