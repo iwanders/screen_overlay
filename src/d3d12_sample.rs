@@ -24,6 +24,7 @@ trait DXSample {
         Self: Sized;
 
     fn bind_to_window(&mut self, hwnd: &HWND) -> Result<()>;
+    fn service_debug_queue(&self) -> Result<()>;
 
     fn update(&mut self) {}
     fn render(&mut self) -> Result<()> {Ok(())}
@@ -102,7 +103,8 @@ where
     // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
     let hwnd = unsafe {
         CreateWindowExA(
-            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_COMPOSITED } else {WINDOW_EX_STYLE::default()},
+            // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_COMPOSITED } else {WINDOW_EX_STYLE::default()},
+            if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT } else {WINDOW_EX_STYLE::default()},
             s!("RustWindowClass"),
             PCSTR(title.as_ptr()),
             // WS_OVERLAPPEDWINDOW,
@@ -133,7 +135,7 @@ where
     }
 
     // Do some DWM composition magic.
-    if true {
+    if false {
         unsafe {
             use windows::Win32::Graphics::Dwm::*;
             // let z = WINDOWCOMPOSITIONATTRIBDATA{
@@ -142,7 +144,9 @@ where
         }
     }
 
-    sample.bind_to_window(&hwnd)?;
+    let r = sample.bind_to_window(&hwnd);
+    sample.service_debug_queue()?;
+    let r = r?;
     unsafe { _ = ShowWindow(hwnd, SW_SHOW) };
 
 
@@ -202,6 +206,11 @@ extern "system" fn wndproc<S: DXSample>(
         WM_DESTROY => {
             unsafe { PostQuitMessage(0) };
             LRESULT::default()
+        }
+        WM_PAINT => {
+            println!("Paint");
+            LRESULT::default()
+            
         }
         _ => {
             // println!("somethiung");
@@ -289,7 +298,40 @@ mod d3d12_hello_triangle {
         fence_event: HANDLE,
     }
 
+
+
     impl DXSample for Sample {
+
+        fn service_debug_queue(&self) -> Result<()> {
+            // println!("service");
+            if let Some(q) = &self.info_queue {
+                unsafe {
+                    // q.AddApplicationMessage(D3D12_MESSAGE_SEVERITY(0), s!("hello"))?;
+                    for id in 0..q.GetNumStoredMessages() {
+                        // Two calls according to https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/nf-d3d12sdklayers-id3d12infoqueue-getmessage
+                        // first obtain the length, then do it again for the data.
+
+                        let mut msg_len = 0;
+                        q.GetMessage(id, None, &mut msg_len)?;                    
+                        // Then, allocate the memory, do a reinterpret cast on it, get the msg and print it.
+                        let mut msg_data = vec![0u8; msg_len];
+                        let msg_ptr = std::mem::transmute::<*mut u8, *mut D3D12_MESSAGE>(msg_data.as_mut_ptr());
+                        // typedef struct D3D12_MESSAGE {
+                        // D3D12_MESSAGE_CATEGORY Category;
+                        // D3D12_MESSAGE_SEVERITY Severity;
+                        // D3D12_MESSAGE_ID       ID;
+                        // const char             *pDescription;
+                        // SIZE_T                 DescriptionByteLength;
+                        // } D3D12_MESSAGE;
+                        q.GetMessage(id, Some(msg_ptr), &mut msg_len)?;
+                        println!("{},{}: {}", (*msg_ptr).Category.0, (*msg_ptr).Severity.0, PCSTR::from_raw((*msg_ptr).pDescription).display());
+                    }
+                    q.ClearStoredMessages();
+                }
+            }
+            Ok(())
+        }
+
         fn new(command_line: &SampleCommandLine) -> Result<Self> {
             let (adapter, dxgi_factory, device) = create_device(command_line)?;
             
@@ -325,7 +367,7 @@ mod d3d12_hello_triangle {
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 // SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                // AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
+                AlphaMode: DXGI_ALPHA_MODE_PREMULTIPLIED,
                 SampleDesc: DXGI_SAMPLE_DESC {
                     Count: 1,
                     ..Default::default()
@@ -459,32 +501,9 @@ mod d3d12_hello_triangle {
             (1280, 720)
         }
 
-        fn render(&mut self)  -> Result<()> {
-            if let Some(q) = &self.info_queue {
-                unsafe {
-                    // q.AddApplicationMessage(D3D12_MESSAGE_SEVERITY(0), s!("hello"))?;
-                    for id in 0..q.GetNumStoredMessages() {
-                        // Two calls according to https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/nf-d3d12sdklayers-id3d12infoqueue-getmessage
-                        // first obtain the length, then do it again for the data.
 
-                        let mut msg_len = 0;
-                        q.GetMessage(id, None, &mut msg_len)?;                    
-                        // Then, allocate the memory, do a reinterpret cast on it, get the msg and print it.
-                        let mut msg_data = vec![0u8; msg_len];
-                        let msg_ptr = std::mem::transmute::<*mut u8, *mut D3D12_MESSAGE>(msg_data.as_mut_ptr());
-                        // typedef struct D3D12_MESSAGE {
-                        // D3D12_MESSAGE_CATEGORY Category;
-                        // D3D12_MESSAGE_SEVERITY Severity;
-                        // D3D12_MESSAGE_ID       ID;
-                        // const char             *pDescription;
-                        // SIZE_T                 DescriptionByteLength;
-                        // } D3D12_MESSAGE;
-                        q.GetMessage(id, Some(msg_ptr), &mut msg_len)?;
-                        println!("{},{}: {}", (*msg_ptr).Category.0, (*msg_ptr).Severity.0, PCSTR::from_raw((*msg_ptr).pDescription).display());
-                    }
-                    q.ClearStoredMessages();
-                }
-            }
+        fn render(&mut self)  -> Result<()> {
+            self.service_debug_queue()?;
             if let Some(resources) = &mut self.resources {
                 populate_command_list(resources).unwrap();
 
