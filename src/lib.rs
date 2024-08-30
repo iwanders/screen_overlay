@@ -19,10 +19,12 @@ debug print issues perhaps similar to
 https://github.com/EasyJellySniper/RustD3D12/blob/ce0c05e51188f7c41b8fbef1d36bdc2c594bbbb0/src/hello_world_triangle.rs
 https://www.gamedev.net/blogs/entry/2294005-implement-d3d12-with-the-rust/
 
+https://learn.microsoft.com/en-us/windows/win32/directcomp/initialize-directcomposition
+
 */
 
 
-mod d3d12_sample;
+// mod d3d12_sample;
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 
@@ -72,7 +74,7 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> windows::Win32::Foundation::COLORREF {
 }
 
 pub fn main() -> Result<()> {
-    return d3d12_sample::main();
+    // return d3d12_sample::main();
     unsafe {
         let instance = GetModuleHandleA(None)?;
         debug_assert!(!instance.0.is_null());
