@@ -105,15 +105,16 @@ where
         CreateWindowExA(
             // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_COMPOSITED } else {WINDOW_EX_STYLE::default()},
             // if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED |  WS_EX_TRANSPARENT } else {WINDOW_EX_STYLE::default()},
-            if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST } else {WINDOW_EX_STYLE::default()},
+            // if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST } else {WINDOW_EX_STYLE::default()},
+            if WINDOW_TRANSPARENT {WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST } else {WINDOW_EX_STYLE::default()},
             s!("RustWindowClass"),
             PCSTR(title.as_ptr()),
             WS_OVERLAPPEDWINDOW,
             // WS_POPUP,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            window_rect.right - window_rect.left,
-            window_rect.bottom - window_rect.top,
+            1920,
+            1080,
             None, // no parent window
             None, // no menus
             instance,
@@ -121,6 +122,13 @@ where
         )
     }?;
 
+    let mut window_rect = RECT {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1080,
+    };
+    unsafe { AdjustWindowRect(&mut window_rect, WS_OVERLAPPEDWINDOW, false)? };
     if false {
         unsafe {
             use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea};
@@ -136,7 +144,7 @@ where
     }
 
     // set  clipping thing
-    if false {
+    if true {
         unsafe {
             let mut window_rect = RECT {
                 left: 0,
@@ -219,6 +227,33 @@ extern "system" fn wndproc<S: DXSample>(
                 let create_struct: &CREATESTRUCTA = transmute(lparam);
                 SetWindowLongPtrA(window, GWLP_USERDATA, create_struct.lpCreateParams as _);
             }
+
+            
+            unsafe {
+                use windows::Win32::Graphics::Gdi::*;
+                use windows::Win32::UI::HiDpi::*;
+                let monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+                let mut dpi = (0, 0);
+                GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1);
+                // self.dpi = (dpi.0 as f32, dpi.1 as f32);
+
+                // if cfg!(debug_assertions) {
+                    // println!("initial dpi: {:?}", self.dpi);
+                // }
+
+                // let size = self.effective_window_size()?;
+
+                SetWindowPos(
+                    window,
+                    None,
+                    0,
+                    0,
+                    1920,
+                    1080,
+                    SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
+                );
+            }
+
             LRESULT::default()
         }
         WM_DESTROY => {
