@@ -439,7 +439,7 @@ impl Window {
                 WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST ,
                 window_class,
                 s!("Sample Window"),
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
+                WS_OVERLAPPED| WS_VISIBLE, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -449,6 +449,23 @@ impl Window {
                 instance,
                 Some(self as *mut _ as _),
             )?;
+            let hwnd = handle;
+
+            let mut window_rect = RECT {
+                left: 0,
+                top: 0,
+                right: 1920,
+                bottom: 1080,
+            };
+            if true {
+                unsafe {
+
+                    let rect = GetWindowRect(hwnd, &mut window_rect)?;
+                    let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
+                    windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
+                    ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+                }
+            }
 
             debug_assert!(!handle.is_invalid());
             debug_assert!(handle == self.handle);
