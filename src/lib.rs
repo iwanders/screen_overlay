@@ -435,7 +435,8 @@ impl Window {
             debug_assert!(atom != 0);
 
             let handle = CreateWindowExA(
-                WS_EX_NOREDIRECTIONBITMAP,
+                // WS_EX_NOREDIRECTIONBITMAP,
+                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST ,
                 window_class,
                 s!("Sample Window"),
                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
