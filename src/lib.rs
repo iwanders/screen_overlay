@@ -21,6 +21,9 @@ https://www.gamedev.net/blogs/entry/2294005-implement-d3d12-with-the-rust/
 
 https://learn.microsoft.com/en-us/windows/win32/directcomp/initialize-directcomposition
 
+
+Lets just follow this direct composition example.
+https://github.com/microsoft/windows-rs/tree/9f5ec21529ec0530ac16e9a1c5d16eb8bb290535/crates/samples/windows/dcomp
 */
 
 
@@ -94,16 +97,16 @@ pub fn main() -> Result<()> {
         let atom = RegisterClassA(&wc);
         debug_assert!(atom != 0);
 
-        const WINDOW_TRANSPARENT: bool = false;
+        const WINDOW_TRANSPARENT: bool = true;
 
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(
             // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE} else {WINDOW_EX_STYLE::default()},
-            if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE } else {WINDOW_EX_STYLE::default()},
+            if WINDOW_TRANSPARENT {WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST} else {WINDOW_EX_STYLE::default()},
             window_class,
             s!("This is a sample window"),
             // WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            WS_POPUP | WS_VISIBLE,
+            WS_OVERLAPPEDWINDOW,
             // WS_VISIBLE,
             // WS_VISIBLE | WS_DLGFRAME,
             0,
@@ -117,6 +120,23 @@ pub fn main() -> Result<()> {
             None,
         )?;
 
+        let mut window_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        unsafe { AdjustWindowRect(&mut window_rect, WS_OVERLAPPEDWINDOW, false)? };
+        // let hwnd = handle;
+        if true {
+            unsafe {
+
+                let rect = GetWindowRect(hwnd, &mut window_rect)?;
+                let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
+                windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
+                ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+            }
+        }
         let extended_style = GetWindowLongA(hwnd, GWL_EXSTYLE) as u32;
         println!("GWL_EXSTYLE: {:?}", GWL_EXSTYLE);
         println!("WS_EX_TRANSPARENT: {:?}", WS_EX_TRANSPARENT);
