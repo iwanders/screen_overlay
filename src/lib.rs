@@ -67,11 +67,11 @@ impl Window {
             // let mut values = [b'?'; CARD_ROWS * CARD_COLUMNS];
 
             // for i in 0..values.len() / 2 {
-                // let value = rng.gen_range(b'A'..=b'Z');
-                // values[i * 2] = value;
-                // values[i * 2 + 1] = value + b'a' - b'A';
+            // let value = rng.gen_range(b'A'..=b'Z');
+            // values[i * 2] = value;
+            // values[i * 2 + 1] = value + b'a' - b'A';
             // }
-            let values = [0x61;CARD_ROWS * CARD_COLUMNS];
+            let values = [0x61; CARD_ROWS * CARD_COLUMNS];
 
             // values.shuffle(&mut rng);
             let mut cards = Vec::new();
@@ -436,10 +436,10 @@ impl Window {
 
             let handle = CreateWindowExA(
                 // WS_EX_NOREDIRECTIONBITMAP,
-                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST ,
+                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
                 window_class,
                 s!("Sample Window"),
-                WS_OVERLAPPED| WS_VISIBLE, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
+                WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -458,13 +458,13 @@ impl Window {
                 bottom: 1080,
             };
             if true {
-                unsafe {
+                // unsafe {
 
-                    let rect = GetWindowRect(hwnd, &mut window_rect)?;
-                    let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
-                    windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
-                    ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
-                }
+                // GetWindowRect(hwnd, &mut window_rect)?;
+                let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
+                windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
+                ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+                // }
             }
 
             debug_assert!(!handle.is_invalid());
