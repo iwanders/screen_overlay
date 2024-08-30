@@ -92,7 +92,7 @@ pub fn main() -> Result<()> {
         let atom = RegisterClassA(&wc);
         debug_assert!(atom != 0);
 
-        const WINDOW_TRANSPARENT: bool = true;
+        const WINDOW_TRANSPARENT: bool = false;
 
         // Extended styles: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         let hwnd = CreateWindowExA(

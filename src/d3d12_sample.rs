@@ -104,7 +104,7 @@ where
     let hwnd = unsafe {
         CreateWindowExA(
             // if WINDOW_TRANSPARENT {WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_COMPOSITED } else {WINDOW_EX_STYLE::default()},
-            // if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT } else {WINDOW_EX_STYLE::default()},
+            // if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED |  WS_EX_TRANSPARENT } else {WINDOW_EX_STYLE::default()},
             if WINDOW_TRANSPARENT {WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST } else {WINDOW_EX_STYLE::default()},
             s!("RustWindowClass"),
             PCSTR(title.as_ptr()),
@@ -134,6 +134,23 @@ where
             DwmExtendFrameIntoClientArea(hwnd, &margin);
         }
     }
+
+    // set  clipping thing
+    if false {
+        unsafe {
+            let mut window_rect = RECT {
+                left: 0,
+                top: 0,
+                right: size.0,
+                bottom: size.1,
+            };
+            let rect = GetWindowRect(hwnd, &mut window_rect)?;
+            let rgn = windows::Win32::Graphics::Gdi::CreateEllipticRgnIndirect(&window_rect);
+            windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
+            ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+        }
+    }
+    
 
     // Do some DWM composition magic.
     if false {
@@ -354,10 +371,6 @@ mod d3d12_hello_triangle {
                 })?
             };
 
-            if let Some(v) = &self.dxgi_adapter {
-                // let dv: IDXGIDevice = v.cast()?;
-            }
-
             let (width, height) = self.window_size();
 
             let swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
@@ -378,7 +391,6 @@ mod d3d12_hello_triangle {
             let swap_chain: IDXGISwapChain3 = unsafe {
                 self.dxgi_factory.CreateSwapChainForComposition(
                     &command_queue,
-                    // *hwnd,
                     &swap_chain_desc,
                     None,
                 )?
@@ -423,6 +435,7 @@ mod d3d12_hello_triangle {
                 self.dxgi_factory
                     .MakeWindowAssociation(*hwnd, DXGI_MWA_NO_ALT_ENTER)?;
             }
+            
 
             let frame_index = unsafe { swap_chain.GetCurrentBackBufferIndex() };
 
@@ -668,7 +681,7 @@ mod d3d12_hello_triangle {
         // Okay, adapter perhaps is that dxgi device? yep it is; Dxgi::IDXGIAdapter1
 
         let mut device: Option<ID3D12Device> = None;
-        unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_1, &mut device) }?;
+        unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, &mut device) }?;
         // let v = device.unwrap();
         const HAVE_INFOQUEUE1: bool = false; // only for win 11?
         if HAVE_INFOQUEUE1 {
@@ -780,6 +793,19 @@ mod d3d12_hello_triangle {
             },
         ];
 
+        let blend_state =  D3D12_RENDER_TARGET_BLEND_DESC {
+                        BlendEnable: true.into(),
+                        LogicOpEnable: false.into(),
+                        SrcBlend: D3D12_BLEND_ONE,
+                        DestBlend: D3D12_BLEND_INV_SRC_ALPHA,
+                        BlendOp: D3D12_BLEND_OP_ADD,
+                        SrcBlendAlpha: D3D12_BLEND_ONE,
+                        DestBlendAlpha: D3D12_BLEND_INV_SRC_ALPHA,
+                        BlendOpAlpha: D3D12_BLEND_OP_ADD,
+                        LogicOp: D3D12_LOGIC_OP_CLEAR,
+                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
+                    };
+
         let mut desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             InputLayout: D3D12_INPUT_LAYOUT_DESC {
                 pInputElementDescs: input_element_descs.as_mut_ptr(),
@@ -803,25 +829,22 @@ mod d3d12_hello_triangle {
                 AlphaToCoverageEnable: false.into(),
                 IndependentBlendEnable: false.into(),
                 RenderTarget: [
-                    D3D12_RENDER_TARGET_BLEND_DESC {
-                        BlendEnable: false.into(),
-                        LogicOpEnable: false.into(),
-                        SrcBlend: D3D12_BLEND_ONE,
-                        DestBlend: D3D12_BLEND_ZERO,
-                        BlendOp: D3D12_BLEND_OP_ADD,
-                        SrcBlendAlpha: D3D12_BLEND_ONE,
-                        DestBlendAlpha: D3D12_BLEND_ZERO,
-                        BlendOpAlpha: D3D12_BLEND_OP_ADD,
-                        LogicOp: D3D12_LOGIC_OP_NOOP,
-                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
-                    },
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                   blend_state,
+                    /*
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
-                    D3D12_RENDER_TARGET_BLEND_DESC::default(),
+                    D3D12_RENDER_TARGET_BLEND_DESC::default(),*/
                 ],
             },
             DepthStencilState: D3D12_DEPTH_STENCIL_DESC::default(),
