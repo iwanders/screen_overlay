@@ -732,7 +732,7 @@ fn draw_card_back(
         dc.DrawBitmap(
             bitmap,
             None,
-            1.0,
+            0.5, // alpha
             D2D1_INTERPOLATION_MODE_LINEAR,
             Some(&D2D_RECT_F {
                 left,
