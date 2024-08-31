@@ -11,9 +11,9 @@ use windows::{
     },
 };
 
-// const CARD_ROWS: usize = 3;
-// const CARD_COLUMNS: usize = 6;
-// const CARD_MARGIN: f32 = 1.0;
+// This started based on the direct composition example:
+// https://github.com/microsoft/windows-rs/tree/ef06753b0df2aaa16894416191bcde328b9d6ffb/crates/samples/windows/dcomp
+
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 
@@ -26,21 +26,10 @@ pub fn main() -> Result<()> {
     window.run()
 }
 
-#[derive(PartialEq)]
-enum Status {
-    Hidden,
-    Selected,
-    Matched,
-}
 
-struct Card {
-    status: Status,
-    value: u8,
-    offset: (f32, f32),
-    variable: IUIAnimationVariable2,
-    rotation: Option<IDCompositionRotateTransform3D>,
-}
 
+// The IDCompositionVisual appears to be a tree, as per;
+// https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
 struct DrawElement{
     position: (f32, f32),
     visual: IDCompositionVisual2,
@@ -53,8 +42,6 @@ struct Window {
     image: IWICFormatConverter,
     manager: IUIAnimationManager2,
     library: IUIAnimationTransitionLibrary2,
-    first: Option<usize>,
-    cards: Vec<Card>,
     device: Option<ID3D11Device>,
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
@@ -68,23 +55,6 @@ impl Window {
             let manager: IUIAnimationManager2 =
                 CoCreateInstance(&UIAnimationManager2, None, CLSCTX_INPROC_SERVER)?;
 
-            // let values = [0x61; CARD_ROWS * CARD_COLUMNS];
-
-            // values.shuffle(&mut rng);
-            let mut cards = Vec::new();
-
-            /*
-            for value in values {
-                cards.push(Card {
-                    status: Status::Hidden,
-                    value,
-                    offset: (0.0, 0.0),
-                    variable: manager.CreateAnimationVariable(0.0)?,
-                    rotation: None,
-                });
-            }
-            */
-
             let library =
                 CoCreateInstance(&UIAnimationTransitionLibrary2, None, CLSCTX_INPROC_SERVER)?;
 
@@ -95,8 +65,6 @@ impl Window {
                 image: create_image()?,
                 manager,
                 library,
-                first: None,
-                cards,
                 device: None,
                 desktop: None,
                 target: None,
@@ -154,68 +122,6 @@ impl Window {
             };
             self.elements.push(element);
 
-
-            
-            /*
-            for row in 0..CARD_ROWS {
-                for column in 0..CARD_COLUMNS {
-                    let card = &mut self.cards[row * CARD_COLUMNS + column];
-
-                    card.offset = (
-                            column as f32 * (CARD_WIDTH + CARD_MARGIN) + CARD_MARGIN,
-                            row as f32 * (CARD_HEIGHT + CARD_MARGIN) + CARD_MARGIN,
-                    );
-
-                    if card.status == Status::Matched {
-                        continue;
-                    }
-
-                    let front_visual = create_visual(&desktop)?;
-                    front_visual.SetOffsetX2(card.offset.0)?;
-                    front_visual.SetOffsetY2(card.offset.1)?;
-                    root_visual.AddVisual(&front_visual, false, None)?;
-
-                    let back_visual = create_visual(&desktop)?;
-                    back_visual.SetOffsetX2(card.offset.0)?;
-                    back_visual.SetOffsetY2(card.offset.1)?;
-                    root_visual.AddVisual(&back_visual, false, None)?;
-
-                    let front_surface = create_surface(&desktop, width, height)?;
-                    front_visual.SetContent(&front_surface)?;
-                    draw_card_front(&front_surface, card.value, &self.format, &font_brush)?;
-
-                    let back_surface = create_surface(&desktop, width, height)?;
-                    back_visual.SetContent(&back_surface)?;
-                    draw_card_back(&back_surface, &bitmap, card.offset)?;
-
-                    let rotation = desktop.CreateRotateTransform3D()?;
-
-                    if card.status == Status::Selected {
-                        rotation.SetAngle2(180.0)?;
-                    }
-
-                    rotation.SetAxisZ2(0.0)?;
-                    rotation.SetAxisY2(1.0)?;
-                    create_effect(&desktop, &front_visual, &rotation, true)?;
-                    create_effect(&desktop, &back_visual, &rotation, false)?;
-                    card.rotation = Some(rotation);
-
-                    let mut stats = Default::default();
-                    desktop.GetFrameStatistics(&mut stats)?;
-
-                    let next_frame: f64 =
-                        stats.nextEstimatedFrameTime as f64 / stats.timeFrequency as f64;
-
-                    self.manager.Update(next_frame, None)?;
-                    let storyboard = self.manager.CreateStoryboard()?;
-                    let key_frame = add_show_transition(&self.library, &storyboard, &card)?;
-
-                    storyboard.Schedule(next_frame, None)?;
-                    update_animation(&desktop, &card)?;
-                    desktop.Commit()?;
-                }
-            }
-            */
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
@@ -340,6 +246,7 @@ impl Window {
             let mut message = MSG::default();
 
             while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
+                println!("message: {message:?}");
                 DispatchMessageA(&message);
             }
 
@@ -472,84 +379,6 @@ fn create_surface(
             DXGI_FORMAT_B8G8R8A8_UNORM,
             DXGI_ALPHA_MODE_PREMULTIPLIED,
         )
-    }
-}
-
-fn add_show_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    storyboard: &IUIAnimationStoryboard2,
-    card: &Card,
-) -> Result<UI_ANIMATION_KEYFRAME> {
-    unsafe {
-        let duration = (180.0 - card.variable.GetValue()?) / 180.0;
-        let transition = create_transition(library, duration, 180.0)?;
-        storyboard.AddTransition(&card.variable, &transition)?;
-        storyboard.AddKeyframeAfterTransition(&transition)
-    }
-}
-
-fn add_hide_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    storyboard: &IUIAnimationStoryboard2,
-    key_frame: UI_ANIMATION_KEYFRAME,
-    final_value: f64,
-    card: &Card,
-) -> Result<()> {
-    unsafe {
-        let transition = create_transition(library, 1.0, final_value)?;
-        storyboard.AddTransitionAtKeyframe(&card.variable, &transition, key_frame)
-    }
-}
-
-fn update_animation(device: &IDCompositionDesktopDevice, card: &Card) -> Result<()> {
-    unsafe {
-        let animation = device.CreateAnimation()?;
-        card.variable.GetCurve(&animation)?;
-
-        card.rotation
-            .as_ref()
-            .expect("IDCompositionRotateTransform3D")
-            .SetAngle(&animation)
-    }
-}
-
-fn create_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    duration: f64,
-    final_value: f64,
-) -> Result<IUIAnimationTransition2> {
-    unsafe { library.CreateAccelerateDecelerateTransition(duration, final_value, 0.2, 0.8) }
-}
-
-fn create_effect(
-    device: &IDCompositionDesktopDevice,
-    visual: &IDCompositionVisual2,
-    rotation: &IDCompositionRotateTransform3D,
-    front: bool,
-) -> Result<()> {
-    unsafe {
-        let width = CARD_WIDTH;
-        let height = CARD_HEIGHT;
-
-        let pre_matrix = Matrix4x4::translation(-width / 2.0, -height / 2.0, 0.0)
-            * Matrix4x4::rotation_y(if front { 180.0 } else { 0.0 });
-
-        let pre_transform = device.CreateMatrixTransform3D()?;
-        pre_transform.SetMatrix(&pre_matrix)?;
-
-        let post_matrix = Matrix4x4::perspective_projection(width * 2.0)
-            * Matrix4x4::translation(width / 2.0, height / 2.0, 0.0);
-
-        let post_transform = device.CreateMatrixTransform3D()?;
-        post_transform.SetMatrix(&post_matrix)?;
-
-        let transform = device.CreateTransform3DGroup(&[
-            pre_transform.cast().ok(),
-            rotation.cast().ok(),
-            post_transform.cast().ok(),
-        ])?;
-
-        visual.SetEffect(&transform)
     }
 }
 
