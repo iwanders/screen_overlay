@@ -16,13 +16,11 @@ const CARD_COLUMNS: usize = 6;
 const CARD_MARGIN: f32 = 1.0;
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
-const WINDOW_WIDTH: f32 = CARD_COLUMNS as f32 * (CARD_WIDTH + CARD_MARGIN) + CARD_MARGIN;
-const WINDOW_HEIGHT: f32 = CARD_ROWS as f32 * (CARD_HEIGHT + CARD_MARGIN) + CARD_MARGIN;
+
 
 pub fn main() -> Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
-        // SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)?;
     }
     let mut window = Window::new()?;
     window.run()
@@ -45,7 +43,6 @@ struct Card {
 
 struct Window {
     handle: HWND,
-    // dpi: (f32, f32),
     format: IDWriteTextFormat,
     image: IWICFormatConverter,
     manager: IUIAnimationManager2,
@@ -76,20 +73,6 @@ impl Window {
                     variable: manager.CreateAnimationVariable(0.0)?,
                     rotation: None,
                 });
-            }
-
-            if cfg!(debug_assertions) {
-                println!("deck:");
-                for row in 0..CARD_ROWS {
-                    for column in 0..CARD_COLUMNS {
-                        print!(
-                            " {}",
-                            char::from_u32(cards[row * CARD_COLUMNS + column].value as u32)
-                                .expect("char")
-                        );
-                    }
-                    println!();
-                }
             }
 
             let library =
@@ -129,7 +112,7 @@ impl Window {
             let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
             dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
 
-            let brush = dc.CreateSolidColorBrush(
+            let font_brush = dc.CreateSolidColorBrush(
                 &D2D1_COLOR_F {
                     r: 0.0,
                     g: 0.0,
@@ -168,7 +151,7 @@ impl Window {
 
                     let front_surface = create_surface(&desktop, width, height)?;
                     front_visual.SetContent(&front_surface)?;
-                    draw_card_front(&front_surface, card.value, &self.format, &brush)?;
+                    draw_card_front(&front_surface, card.value, &self.format, &font_brush)?;
 
                     let back_surface = create_surface(&desktop, width, height)?;
                     back_visual.SetContent(&back_surface)?;
@@ -196,7 +179,7 @@ impl Window {
                     let storyboard = self.manager.CreateStoryboard()?;
                     let key_frame = add_show_transition(&self.library, &storyboard, &card)?;
 
-                    // storyboard.Schedule(next_frame, None)?;
+                    storyboard.Schedule(next_frame, None)?;
                     update_animation(&desktop, &card)?;
                     desktop.Commit()?;
                 }
@@ -233,12 +216,8 @@ impl Window {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
             };
-            // MONITORINFO monitor_info;
-            // monitor_info.cbSize = sizeof(monitor_info);
-            // GetMonitorInfo(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &monitor_info);
             GetMonitorInfoA(monitor, &mut monitor_info);
-            // gfx::Rect window_rect(monitor_info.rcMonitor);
-            println!("Setting size to: {:?}", monitor_info.rcMonitor);
+            // println!("Setting size to: {:?}", monitor_info.rcMonitor);
             Ok(monitor_info.rcMonitor)
         }
     }
@@ -322,6 +301,7 @@ impl Window {
                 windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
                 ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
             }
+            // self.create_handler()?;
 
             debug_assert!(!handle.is_invalid());
             debug_assert!(handle == self.handle);
