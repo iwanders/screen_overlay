@@ -208,24 +208,6 @@ impl Window {
         }
     }
 
-    fn effective_window_size(&self) -> Result<(i32, i32)> {
-        unsafe {
-            let mut rect = RECT {
-                left: 0,
-                top: 0,
-                right: logical_to_physical(WINDOW_WIDTH, self.dpi.0) as i32,
-                bottom: logical_to_physical(WINDOW_HEIGHT, self.dpi.1) as i32,
-            };
-
-            AdjustWindowRect(
-                &mut rect,
-                WINDOW_STYLE(GetWindowLongW(self.handle, GWL_STYLE) as u32),
-                false,
-            )?;
-
-            Ok((rect.right - rect.left, rect.bottom - rect.top))
-        }
-    }
 
     fn click_handler(&mut self, lparam: LPARAM) -> Result<()> {
         unsafe {
