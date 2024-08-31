@@ -2,12 +2,24 @@ use windows::{
     core::*,
     Foundation::Numerics::*,
     Win32::{
-        Foundation::*, Graphics::Direct2D::Common::*, Graphics::Direct2D::*, Graphics::Direct3D::*,
-        Graphics::Direct3D11::*, Graphics::DirectComposition::*, Graphics::DirectWrite::*,
-        Graphics::Dxgi::Common::*, Graphics::Dxgi::*, Graphics::Gdi::*, Graphics::Imaging::D2D::*,
-        Graphics::Imaging::*, System::Com::*, System::LibraryLoader::*, UI::Animation::*,
+        Foundation::*,
+        Graphics::Direct2D::Common::*,
+        Graphics::Direct2D::*,
+        Graphics::Direct3D::*,
+        Graphics::Direct3D11::*,
+        Graphics::DirectComposition::*,
+        Graphics::DirectWrite::*,
+        Graphics::Dxgi::Common::*,
+        Graphics::Dxgi::*,
+        Graphics::Gdi::*,
+        Graphics::Imaging::D2D::*,
+        Graphics::Imaging::*,
+        System::Com::*,
+        System::LibraryLoader::*,
+        UI::Animation::*,
         // UI::HiDpi::*,
-        UI::Shell::*, UI::WindowsAndMessaging::*,
+        UI::Shell::*,
+        UI::WindowsAndMessaging::*,
     },
 };
 
@@ -17,7 +29,6 @@ use windows::{
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 
-
 pub fn main() -> Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
@@ -26,11 +37,9 @@ pub fn main() -> Result<()> {
     window.run()
 }
 
-
-
 // The IDCompositionVisual appears to be a tree, as per;
 // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
-struct DrawElement{
+struct DrawElement {
     position: (f32, f32),
     visual: IDCompositionVisual2,
     surface: IDCompositionSurface,
@@ -115,13 +124,12 @@ impl Window {
             visual.SetContent(&surface)?;
             draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
 
-            let element = DrawElement{
+            let element = DrawElement {
                 position: (0.0, 0.0),
                 visual,
                 surface,
             };
             self.elements.push(element);
-
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
@@ -165,9 +173,15 @@ impl Window {
             let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
             let desired_size = self.desired_window_size()?;
             println!("Setting size to: {:?}", desired_size);
-            SetWindowPos(self.handle, None,
-                desired_size.left, desired_size.top, desired_size.right, desired_size.bottom,
-                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)
+            SetWindowPos(
+                self.handle,
+                None,
+                desired_size.left,
+                desired_size.top,
+                desired_size.right,
+                desired_size.bottom,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            )
         }
     }
 
@@ -392,10 +406,7 @@ fn draw_card_front(
         let mut offset = Default::default();
         let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
 
-        dc.SetTransform(&Matrix3x2::translation(
-            offset.x as f32,
-            offset.y as f32,
-        ));
+        dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
         dc.Clear(Some(&D2D1_COLOR_F {
             r: 1.0,
@@ -456,4 +467,3 @@ fn draw_card_back(
         surface.EndDraw()
     }
 }
-
