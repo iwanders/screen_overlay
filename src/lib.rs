@@ -135,6 +135,7 @@ impl Window {
             self.target = Some(target);
 
             let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+            dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
 
             let brush = dc.CreateSolidColorBrush(
                 &D2D1_COLOR_F {
