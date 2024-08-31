@@ -338,6 +338,7 @@ impl Window {
         }
     }
 
+    /*
     fn dpi_changed_handler(&mut self, wparam: WPARAM, lparam: LPARAM) -> Result<()> {
         unsafe {
             self.dpi = (wparam.0 as u16 as f32, (wparam.0 >> 16) as f32);
@@ -362,7 +363,7 @@ impl Window {
             self.device = None;
             Ok(())
         }
-    }
+    }*/
 
     fn create_handler(&mut self) -> Result<()> {
         unsafe {
@@ -376,6 +377,21 @@ impl Window {
             }
 
             let size = self.effective_window_size()?;
+
+            let mut monitor_info = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            // MONITORINFO monitor_info;
+            // monitor_info.cbSize = sizeof(monitor_info);
+            // GetMonitorInfo(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &monitor_info);
+            GetMonitorInfoA(monitor, &mut monitor_info);
+            // gfx::Rect window_rect(monitor_info.rcMonitor);
+            println!("Setting size to: {:?}", monitor_info.rcMonitor);
+            SetWindowPos(self.handle, None,
+                monitor_info.rcMonitor.left, monitor_info.rcMonitor.top, monitor_info.rcMonitor.right, monitor_info.rcMonitor.bottom,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            return Ok(());
 
             SetWindowPos(
                 self.handle,
@@ -402,9 +418,7 @@ impl Window {
                         self.device = None;
                     });
                 }
-                WM_DPICHANGED => self
-                    .dpi_changed_handler(wparam, lparam)
-                    .expect("WM_DPICHANGED"),
+                // WM_DPICHANGED => self.dpi_changed_handler(wparam, lparam).expect("WM_DPICHANGED"),
                 WM_CREATE => self.create_handler().expect("WM_CREATE"),
                 WM_WINDOWPOSCHANGING => {
                     // Prevents window resizing due to device loss
