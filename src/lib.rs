@@ -23,19 +23,38 @@ use windows::{
     },
 };
 
+use std::sync::Arc;
+
 // This started based on the direct composition example:
 // https://github.com/microsoft/windows-rs/tree/ef06753b0df2aaa16894416191bcde328b9d6ffb/crates/samples/windows/dcomp
+
+// API
+//  - Drawable -> Returns RAII handle with interface to drawable.
+//  - Should be thread safe (all of it)
+//  - Need a wrapper with an interior Arc.
+
 
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 
-pub fn main() -> Result<()> {
+pub fn main() -> std::result::Result<(), Error> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
     }
-    let mut window = Overlay::new()?;
-    window.create_window()?;
-    window.run_msg_loop()
+    let window = Overlay::new()?;
+    // Ok(run_msg_loop()?)
+
+    let twindow = window.clone();
+    let msg_loop_thread = std::thread::spawn(move ||{
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        twindow.create_image().expect("create image failed");
+        std::thread::sleep(std::time::Duration::from_millis(1000000));
+        
+        
+    });
+    Ok(run_msg_loop()?)
+
+    // Ok(())
 }
 
 // The IDCompositionVisual appears to be a tree, as per;
@@ -46,7 +65,7 @@ struct DrawElement {
     surface: IDCompositionSurface,
 }
 
-struct Overlay {
+struct OverlayImpl {
     handle: HWND,
     format: IDWriteTextFormat,
     image: IWICFormatConverter,
@@ -58,8 +77,22 @@ struct Overlay {
     root_visual: Option<IDCompositionVisual2>,
     elements: Vec<DrawElement>,
 }
+// Is this legal?
+unsafe impl Send for OverlayImpl{}
 
-impl Overlay {
+fn run_msg_loop() -> Result<()> {
+    unsafe {
+        let mut message = MSG::default();
+        while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
+            println!("message: {message:?}");
+            DispatchMessageA(&message);
+        }
+        Ok(())
+    }
+}
+
+
+impl OverlayImpl {
     fn new() -> Result<Self> {
         unsafe {
             let manager: IUIAnimationManager2 =
@@ -187,6 +220,38 @@ impl Overlay {
         }
     }
 
+    fn create_image(&mut self) -> Result<()> {
+        unsafe {
+            // let device_2d = create_device_2d(self.device.as_ref().unwrap())?;
+            // let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+            // dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
+            // let bitmap = dc.CreateBitmapFromWicBitmap(&self.image, None)?;
+            let width = CARD_WIDTH;
+            let height = CARD_HEIGHT;
+
+            let visual = create_visual(self.desktop.as_ref().unwrap())?;
+            visual.SetOffsetX2(100.0)?;
+            visual.SetOffsetY2(100.0)?;
+            self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
+            /*
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            visual.SetContent(&surface)?;
+            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;*/
+            let surface = &self.elements[0].surface;
+            visual.SetContent(surface)?;
+            let element = DrawElement {
+                position: (0.0, 0.0),
+                visual,
+                surface: surface.clone(),
+            };
+            self.elements.push(element);
+            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+
+            Ok(())
+        }
+
+    }
+
     fn paint_handler(&mut self) -> Result<()> {
         unsafe {
             if let Some(device) = &self.device {
@@ -261,17 +326,6 @@ impl Overlay {
         LRESULT(0)
     }
 
-    fn run_msg_loop(&mut self) -> Result<()> {
-        unsafe {
-            let mut message = MSG::default();
-            while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
-                println!("message: {message:?}");
-                DispatchMessageA(&message);
-            }
-            Ok(())
-        }
-    }
-
     extern "system" fn wndproc(
         window: HWND,
         message: u32,
@@ -297,6 +351,9 @@ impl Overlay {
         }
     }
 }
+
+
+
 
 fn create_text_format() -> Result<IDWriteTextFormat> {
     unsafe {
@@ -469,5 +526,32 @@ fn draw_card_back(
         );
 
         surface.EndDraw()
+    }
+}
+
+use parking_lot::Mutex;
+pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+#[derive(Clone)]
+pub struct Overlay {
+    overlay: Arc<Mutex<OverlayImpl>>,
+}
+impl Overlay {
+    pub fn new() -> std::result::Result<Overlay, Error> {
+        let window = Arc::new(Mutex::new(OverlayImpl::new()?));
+        {
+            let mut wlock = window.lock();
+            wlock.create_window()?;
+        }
+        Ok(Self{
+            overlay: window
+        })
+    }
+
+    pub fn create_image(&self) -> std::result::Result<(), Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            Ok(wlock.create_image()?)
+        }
     }
 }

@@ -1,4 +1,5 @@
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+fn main() -> Result<(), windows_overlay::Error> {
     windows_overlay::main()?;
     Ok(())
 }
