@@ -365,19 +365,9 @@ impl Window {
         }
     }*/
 
-    fn create_handler(&mut self) -> Result<()> {
+    fn desired_window_size(&self) -> Result<RECT> {
         unsafe {
             let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
-            let mut dpi = (0, 0);
-            GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1)?;
-            self.dpi = (dpi.0 as f32, dpi.1 as f32);
-
-            if cfg!(debug_assertions) {
-                println!("initial dpi: {:?}", self.dpi);
-            }
-
-            let size = self.effective_window_size()?;
-
             let mut monitor_info = MONITORINFO {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
@@ -388,20 +378,22 @@ impl Window {
             GetMonitorInfoA(monitor, &mut monitor_info);
             // gfx::Rect window_rect(monitor_info.rcMonitor);
             println!("Setting size to: {:?}", monitor_info.rcMonitor);
-            SetWindowPos(self.handle, None,
-                monitor_info.rcMonitor.left, monitor_info.rcMonitor.top, monitor_info.rcMonitor.right, monitor_info.rcMonitor.bottom,
-                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-            return Ok(());
+            Ok(monitor_info.rcMonitor)
+        }
+    }
 
-            SetWindowPos(
-                self.handle,
-                None,
-                0,
-                0,
-                size.0,
-                size.1,
-                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
-            )
+    fn create_handler(&mut self) -> Result<()> {
+        unsafe {
+            let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
+            let mut dpi = (0, 0);
+            GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1)?;
+            self.dpi = (dpi.0 as f32, dpi.1 as f32);
+
+            let desired_size = self.desired_window_size()?;
+            println!("Setting size to: {:?}", desired_size);
+            SetWindowPos(self.handle, None,
+                desired_size.left, desired_size.top, desired_size.right, desired_size.bottom,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)
         }
     }
 
@@ -466,20 +458,11 @@ impl Window {
             )?;
             let hwnd = handle;
 
-            let mut window_rect = RECT {
-                left: 0,
-                top: 0,
-                right: 1920,
-                bottom: 1080,
-            };
             if true {
-                // unsafe {
-
-                // GetWindowRect(hwnd, &mut window_rect)?;
+                let window_rect = self.desired_window_size()?;
                 let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
                 windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
                 ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
-                // }
             }
 
             debug_assert!(!handle.is_invalid());
