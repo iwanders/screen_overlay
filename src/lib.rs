@@ -11,9 +11,9 @@ use windows::{
     },
 };
 
-const CARD_ROWS: usize = 3;
-const CARD_COLUMNS: usize = 6;
-const CARD_MARGIN: f32 = 1.0;
+// const CARD_ROWS: usize = 3;
+// const CARD_COLUMNS: usize = 6;
+// const CARD_MARGIN: f32 = 1.0;
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 
@@ -41,6 +41,12 @@ struct Card {
     rotation: Option<IDCompositionRotateTransform3D>,
 }
 
+struct DrawElement{
+    position: (f32, f32),
+    visual: IDCompositionVisual2,
+    surface: IDCompositionSurface,
+}
+
 struct Window {
     handle: HWND,
     format: IDWriteTextFormat,
@@ -52,6 +58,8 @@ struct Window {
     device: Option<ID3D11Device>,
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
+    root_visual: Option<IDCompositionVisual2>,
+    elements: Vec<DrawElement>,
 }
 
 impl Window {
@@ -60,11 +68,12 @@ impl Window {
             let manager: IUIAnimationManager2 =
                 CoCreateInstance(&UIAnimationManager2, None, CLSCTX_INPROC_SERVER)?;
 
-            let values = [0x61; CARD_ROWS * CARD_COLUMNS];
+            // let values = [0x61; CARD_ROWS * CARD_COLUMNS];
 
             // values.shuffle(&mut rng);
             let mut cards = Vec::new();
 
+            /*
             for value in values {
                 cards.push(Card {
                     status: Status::Hidden,
@@ -74,6 +83,7 @@ impl Window {
                     rotation: None,
                 });
             }
+            */
 
             let library =
                 CoCreateInstance(&UIAnimationTransitionLibrary2, None, CLSCTX_INPROC_SERVER)?;
@@ -90,6 +100,8 @@ impl Window {
                 device: None,
                 desktop: None,
                 target: None,
+                root_visual: None,
+                elements: vec![],
             })
         }
     }
@@ -107,6 +119,7 @@ impl Window {
             let target = desktop.CreateTargetForHwnd(self.handle, true)?;
             let root_visual = create_visual(&desktop)?;
             target.SetRoot(&root_visual)?;
+            self.root_visual = Some(root_visual.clone());
             self.target = Some(target);
 
             let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
@@ -126,6 +139,24 @@ impl Window {
             let width = CARD_WIDTH;
             let height = CARD_HEIGHT;
 
+            let visual = create_visual(&desktop)?;
+            visual.SetOffsetX2(0.0)?;
+            visual.SetOffsetY2(0.0)?;
+            root_visual.AddVisual(&visual, false, None)?;
+            let surface = create_surface(&desktop, width, height)?;
+            visual.SetContent(&surface)?;
+            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
+
+            let element = DrawElement{
+                position: (0.0, 0.0),
+                visual,
+                surface,
+            };
+            self.elements.push(element);
+
+
+            
+            /*
             for row in 0..CARD_ROWS {
                 for column in 0..CARD_COLUMNS {
                     let card = &mut self.cards[row * CARD_COLUMNS + column];
@@ -184,6 +215,7 @@ impl Window {
                     desktop.Commit()?;
                 }
             }
+            */
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
