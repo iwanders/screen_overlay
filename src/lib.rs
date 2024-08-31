@@ -367,7 +367,7 @@ impl Window {
 
     fn create_handler(&mut self) -> Result<()> {
         unsafe {
-            let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTONEAREST);
+            let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
             let mut dpi = (0, 0);
             GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1)?;
             self.dpi = (dpi.0 as f32, dpi.1 as f32);
