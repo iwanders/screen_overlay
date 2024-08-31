@@ -33,8 +33,9 @@ pub fn main() -> Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
     }
-    let mut window = Window::new()?;
-    window.run()
+    let mut window = Overlay::new()?;
+    window.create_window()?;
+    window.run_msg_loop()
 }
 
 // The IDCompositionVisual appears to be a tree, as per;
@@ -45,7 +46,7 @@ struct DrawElement {
     surface: IDCompositionSurface,
 }
 
-struct Window {
+struct Overlay {
     handle: HWND,
     format: IDWriteTextFormat,
     image: IWICFormatConverter,
@@ -58,7 +59,7 @@ struct Window {
     elements: Vec<DrawElement>,
 }
 
-impl Window {
+impl Overlay {
     fn new() -> Result<Self> {
         unsafe {
             let manager: IUIAnimationManager2 =
@@ -67,9 +68,8 @@ impl Window {
             let library =
                 CoCreateInstance(&UIAnimationTransitionLibrary2, None, CLSCTX_INPROC_SERVER)?;
 
-            Ok(Window {
+            Ok(Self {
                 handle: Default::default(),
-                // dpi: (0.0, 0.0),
                 format: create_text_format()?,
                 image: create_image()?,
                 manager,
@@ -81,6 +81,56 @@ impl Window {
                 elements: vec![],
             })
         }
+    }
+
+    fn create_window(&mut self) -> Result<()> {
+        unsafe {
+            let instance = GetModuleHandleA(None)?;
+            let window_class = s!("window");
+
+            let wc = WNDCLASSA {
+                hCursor: LoadCursorW(None, IDC_ARROW)?,
+                hInstance: instance.into(),
+                lpszClassName: window_class,
+
+                style: CS_HREDRAW | CS_VREDRAW,
+                lpfnWndProc: Some(Self::wndproc),
+                ..Default::default()
+            };
+
+            let atom = RegisterClassA(&wc);
+            debug_assert!(atom != 0);
+
+            let handle = CreateWindowExA(
+                // WS_EX_NOREDIRECTIONBITMAP,
+                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
+                window_class,
+                s!("Sample Window"),
+                // WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
+                WS_POPUP, // use popup, that disables the titlebar and border.
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                None,
+                None,
+                instance,
+                Some(self as *mut _ as _),
+            )?;
+            let hwnd = handle;
+
+            if true {
+                let window_rect = self.desired_window_size()?;
+                let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
+                windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
+                ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+            }
+            // self.create_handler()?;
+
+            debug_assert!(!handle.is_invalid());
+            debug_assert!(handle == self.handle);
+        }
+        Ok(())
     }
 
     fn create_device_resources(&mut self) -> Result<()> {
@@ -211,59 +261,13 @@ impl Window {
         LRESULT(0)
     }
 
-    fn run(&mut self) -> Result<()> {
+    fn run_msg_loop(&mut self) -> Result<()> {
         unsafe {
-            let instance = GetModuleHandleA(None)?;
-            let window_class = s!("window");
-
-            let wc = WNDCLASSA {
-                hCursor: LoadCursorW(None, IDC_ARROW)?,
-                hInstance: instance.into(),
-                lpszClassName: window_class,
-
-                style: CS_HREDRAW | CS_VREDRAW,
-                lpfnWndProc: Some(Self::wndproc),
-                ..Default::default()
-            };
-
-            let atom = RegisterClassA(&wc);
-            debug_assert!(atom != 0);
-
-            let handle = CreateWindowExA(
-                // WS_EX_NOREDIRECTIONBITMAP,
-                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
-                window_class,
-                s!("Sample Window"),
-                // WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
-                WS_POPUP, // use popup, that disables the titlebar and border.
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                None,
-                None,
-                instance,
-                Some(self as *mut _ as _),
-            )?;
-            let hwnd = handle;
-
-            if true {
-                let window_rect = self.desired_window_size()?;
-                let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
-                windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
-                ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
-            }
-            // self.create_handler()?;
-
-            debug_assert!(!handle.is_invalid());
-            debug_assert!(handle == self.handle);
             let mut message = MSG::default();
-
             while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
                 println!("message: {message:?}");
                 DispatchMessageA(&message);
             }
-
             Ok(())
         }
     }
