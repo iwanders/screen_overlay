@@ -6,13 +6,14 @@ use windows::{
         Graphics::Direct3D11::*, Graphics::DirectComposition::*, Graphics::DirectWrite::*,
         Graphics::Dxgi::Common::*, Graphics::Dxgi::*, Graphics::Gdi::*, Graphics::Imaging::D2D::*,
         Graphics::Imaging::*, System::Com::*, System::LibraryLoader::*, UI::Animation::*,
-        UI::HiDpi::*, UI::Shell::*, UI::WindowsAndMessaging::*,
+        // UI::HiDpi::*,
+        UI::Shell::*, UI::WindowsAndMessaging::*,
     },
 };
 
 const CARD_ROWS: usize = 3;
 const CARD_COLUMNS: usize = 6;
-const CARD_MARGIN: f32 = 15.0;
+const CARD_MARGIN: f32 = 1.0;
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 const WINDOW_WIDTH: f32 = CARD_COLUMNS as f32 * (CARD_WIDTH + CARD_MARGIN) + CARD_MARGIN;
@@ -21,7 +22,7 @@ const WINDOW_HEIGHT: f32 = CARD_ROWS as f32 * (CARD_HEIGHT + CARD_MARGIN) + CARD
 pub fn main() -> Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
-        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)?;
+        // SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)?;
     }
     let mut window = Window::new()?;
     window.run()
@@ -44,7 +45,7 @@ struct Card {
 
 struct Window {
     handle: HWND,
-    dpi: (f32, f32),
+    // dpi: (f32, f32),
     format: IDWriteTextFormat,
     image: IWICFormatConverter,
     manager: IUIAnimationManager2,
@@ -62,15 +63,6 @@ impl Window {
             let manager: IUIAnimationManager2 =
                 CoCreateInstance(&UIAnimationManager2, None, CLSCTX_INPROC_SERVER)?;
 
-            // use rand::{seq::*, *};
-            // let mut rng = rand::thread_rng();
-            // let mut values = [b'?'; CARD_ROWS * CARD_COLUMNS];
-
-            // for i in 0..values.len() / 2 {
-            // let value = rng.gen_range(b'A'..=b'Z');
-            // values[i * 2] = value;
-            // values[i * 2 + 1] = value + b'a' - b'A';
-            // }
             let values = [0x61; CARD_ROWS * CARD_COLUMNS];
 
             // values.shuffle(&mut rng);
@@ -105,7 +97,7 @@ impl Window {
 
             Ok(Window {
                 handle: Default::default(),
-                dpi: (0.0, 0.0),
+                // dpi: (0.0, 0.0),
                 format: create_text_format()?,
                 image: create_image()?,
                 manager,
@@ -148,22 +140,16 @@ impl Window {
             )?;
 
             let bitmap = dc.CreateBitmapFromWicBitmap(&self.image, None)?;
-            let width = logical_to_physical(CARD_WIDTH, self.dpi.0);
-            let height = logical_to_physical(CARD_HEIGHT, self.dpi.1);
+            let width = CARD_WIDTH;
+            let height = CARD_HEIGHT;
 
             for row in 0..CARD_ROWS {
                 for column in 0..CARD_COLUMNS {
                     let card = &mut self.cards[row * CARD_COLUMNS + column];
 
                     card.offset = (
-                        logical_to_physical(
                             column as f32 * (CARD_WIDTH + CARD_MARGIN) + CARD_MARGIN,
-                            self.dpi.0,
-                        ),
-                        logical_to_physical(
                             row as f32 * (CARD_HEIGHT + CARD_MARGIN) + CARD_MARGIN,
-                            self.dpi.1,
-                        ),
                     );
 
                     if card.status == Status::Matched {
@@ -182,11 +168,11 @@ impl Window {
 
                     let front_surface = create_surface(&desktop, width, height)?;
                     front_visual.SetContent(&front_surface)?;
-                    draw_card_front(&front_surface, card.value, &self.format, &brush, self.dpi)?;
+                    draw_card_front(&front_surface, card.value, &self.format, &brush)?;
 
                     let back_surface = create_surface(&desktop, width, height)?;
                     back_visual.SetContent(&back_surface)?;
-                    draw_card_back(&back_surface, &bitmap, card.offset, self.dpi)?;
+                    draw_card_back(&back_surface, &bitmap, card.offset)?;
 
                     let rotation = desktop.CreateRotateTransform3D()?;
 
@@ -196,108 +182,28 @@ impl Window {
 
                     rotation.SetAxisZ2(0.0)?;
                     rotation.SetAxisY2(1.0)?;
-                    create_effect(&desktop, &front_visual, &rotation, true, self.dpi)?;
-                    create_effect(&desktop, &back_visual, &rotation, false, self.dpi)?;
+                    create_effect(&desktop, &front_visual, &rotation, true)?;
+                    create_effect(&desktop, &back_visual, &rotation, false)?;
                     card.rotation = Some(rotation);
+
+                    let mut stats = Default::default();
+                    desktop.GetFrameStatistics(&mut stats)?;
+
+                    let next_frame: f64 =
+                        stats.nextEstimatedFrameTime as f64 / stats.timeFrequency as f64;
+
+                    self.manager.Update(next_frame, None)?;
+                    let storyboard = self.manager.CreateStoryboard()?;
+                    let key_frame = add_show_transition(&self.library, &storyboard, &card)?;
+
+                    // storyboard.Schedule(next_frame, None)?;
+                    update_animation(&desktop, &card)?;
+                    desktop.Commit()?;
                 }
             }
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
-            Ok(())
-        }
-    }
-
-
-    fn click_handler(&mut self, lparam: LPARAM) -> Result<()> {
-        unsafe {
-            let x = lparam.0 as u16 as f32;
-            let y = (lparam.0 >> 16) as f32;
-
-            let width = logical_to_physical(CARD_WIDTH, self.dpi.0);
-            let height = logical_to_physical(CARD_HEIGHT, self.dpi.1);
-            let mut next = None;
-
-            for (index, card) in self.cards.iter().enumerate() {
-                if x > card.offset.0
-                    && y > card.offset.1
-                    && x < card.offset.0 + width
-                    && y < card.offset.1 + height
-                {
-                    next = Some(index);
-                    break;
-                }
-            }
-
-            if let Some(next) = next {
-                if Some(next) == self.first {
-                    if cfg!(debug_assertions) {
-                        println!("same card");
-                    }
-                    return Ok(());
-                }
-
-                if self.cards[next].status == Status::Matched {
-                    if cfg!(debug_assertions) {
-                        println!("previous match");
-                    }
-                    return Ok(());
-                }
-
-                let desktop = self.desktop.as_ref().expect("IDCompositionDesktopDevice");
-                let mut stats = Default::default();
-                desktop.GetFrameStatistics(&mut stats)?;
-
-                let next_frame: f64 =
-                    stats.nextEstimatedFrameTime as f64 / stats.timeFrequency as f64;
-
-                self.manager.Update(next_frame, None)?;
-                let storyboard = self.manager.CreateStoryboard()?;
-                let key_frame = add_show_transition(&self.library, &storyboard, &self.cards[next])?;
-
-                if let Some(first) = self.first.take() {
-                    let final_value = if b'a' - b'A'
-                        == u8::abs_diff(self.cards[first].value, self.cards[next].value)
-                    {
-                        self.cards[first].status = Status::Matched;
-                        self.cards[next].status = Status::Matched;
-                        90.0
-                    } else {
-                        self.cards[first].status = Status::Hidden;
-                        0.0
-                    };
-
-                    add_hide_transition(
-                        &self.library,
-                        &storyboard,
-                        key_frame,
-                        final_value,
-                        &self.cards[first],
-                    )?;
-
-                    add_hide_transition(
-                        &self.library,
-                        &storyboard,
-                        key_frame,
-                        final_value,
-                        &self.cards[next],
-                    )?;
-
-                    storyboard.Schedule(next_frame, None)?;
-                    update_animation(desktop, &self.cards[first])?;
-                    update_animation(desktop, &self.cards[next])?;
-                } else {
-                    self.first = Some(next);
-                    self.cards[next].status = Status::Selected;
-                    storyboard.Schedule(next_frame, None)?;
-                    update_animation(desktop, &self.cards[next])?;
-                }
-
-                desktop.Commit()?;
-            } else if cfg!(debug_assertions) {
-                println!("missed");
-            }
-
             Ok(())
         }
     }
@@ -320,33 +226,6 @@ impl Window {
         }
     }
 
-    /*
-    fn dpi_changed_handler(&mut self, wparam: WPARAM, lparam: LPARAM) -> Result<()> {
-        unsafe {
-            self.dpi = (wparam.0 as u16 as f32, (wparam.0 >> 16) as f32);
-
-            if cfg!(debug_assertions) {
-                println!("dpi changed: {:?}", self.dpi);
-            }
-
-            let rect = &*(lparam.0 as *const RECT);
-            let size = self.effective_window_size()?;
-
-            SetWindowPos(
-                self.handle,
-                None,
-                rect.left,
-                rect.top,
-                size.0,
-                size.1,
-                SWP_NOACTIVATE | SWP_NOZORDER,
-            )?;
-
-            self.device = None;
-            Ok(())
-        }
-    }*/
-
     fn desired_window_size(&self) -> Result<RECT> {
         unsafe {
             let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
@@ -367,10 +246,6 @@ impl Window {
     fn create_handler(&mut self) -> Result<()> {
         unsafe {
             let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
-            let mut dpi = (0, 0);
-            GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1)?;
-            self.dpi = (dpi.0 as f32, dpi.1 as f32);
-
             let desired_size = self.desired_window_size()?;
             println!("Setting size to: {:?}", desired_size);
             SetWindowPos(self.handle, None,
@@ -382,7 +257,7 @@ impl Window {
     fn message_handler(&mut self, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         unsafe {
             match message {
-                WM_LBUTTONUP => self.click_handler(lparam).expect("WM_LBUTTONUP"),
+                // WM_LBUTTONUP => self.click_handler(lparam).expect("WM_LBUTTONUP"),
                 WM_PAINT => {
                     self.paint_handler().unwrap_or_else(|_| {
                         // Device loss can cause rendering to fail and should not be considered fatal.
@@ -428,7 +303,8 @@ impl Window {
                 WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
                 window_class,
                 s!("Sample Window"),
-                WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
+                // WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
+                WS_POPUP, // use popup, that disables the titlebar and border.
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -638,11 +514,10 @@ fn create_effect(
     visual: &IDCompositionVisual2,
     rotation: &IDCompositionRotateTransform3D,
     front: bool,
-    dpi: (f32, f32),
 ) -> Result<()> {
     unsafe {
-        let width = logical_to_physical(CARD_WIDTH, dpi.0);
-        let height = logical_to_physical(CARD_HEIGHT, dpi.1);
+        let width = CARD_WIDTH;
+        let height = CARD_HEIGHT;
 
         let pre_matrix = Matrix4x4::translation(-width / 2.0, -height / 2.0, 0.0)
             * Matrix4x4::rotation_y(if front { 180.0 } else { 0.0 });
@@ -671,23 +546,21 @@ fn draw_card_front(
     value: u8,
     format: &IDWriteTextFormat,
     brush: &ID2D1SolidColorBrush,
-    dpi: (f32, f32),
 ) -> Result<()> {
     unsafe {
         let mut offset = Default::default();
         let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
-        dc.SetDpi(dpi.0, dpi.1);
 
         dc.SetTransform(&Matrix3x2::translation(
-            physical_to_logical(offset.x as f32, dpi.0),
-            physical_to_logical(offset.y as f32, dpi.1),
+            offset.x as f32,
+            offset.y as f32,
         ));
 
         dc.Clear(Some(&D2D1_COLOR_F {
             r: 1.0,
             g: 1.0,
             b: 1.0,
-            a: 1.0,
+            a: 0.8,
         }));
 
         dc.DrawText(
@@ -712,20 +585,18 @@ fn draw_card_back(
     surface: &IDCompositionSurface,
     bitmap: &ID2D1Bitmap1,
     offset: (f32, f32),
-    dpi: (f32, f32),
 ) -> Result<()> {
     unsafe {
         let mut dc_offset = Default::default();
         let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut dc_offset)?;
-        dc.SetDpi(dpi.0, dpi.1);
 
         dc.SetTransform(&Matrix3x2::translation(
-            physical_to_logical(dc_offset.x as f32, dpi.0),
-            physical_to_logical(dc_offset.y as f32, dpi.1),
+            dc_offset.x as f32,
+            dc_offset.y as f32,
         ));
 
-        let left = physical_to_logical(offset.0, dpi.0);
-        let top = physical_to_logical(offset.1, dpi.1);
+        let left = offset.0;
+        let top = offset.1;
 
         dc.DrawBitmap(
             bitmap,
@@ -745,10 +616,3 @@ fn draw_card_back(
     }
 }
 
-fn physical_to_logical(pixel: f32, dpi: f32) -> f32 {
-    pixel * 96.0 / dpi
-}
-
-fn logical_to_physical(pixel: f32, dpi: f32) -> f32 {
-    pixel * dpi / 96.0
-}
