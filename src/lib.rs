@@ -33,9 +33,7 @@ use std::sync::Arc;
 //  - Should be thread safe (all of it)
 //  - Need a wrapper with an interior Arc.
 
-
 // THis is helpful; https://learn.microsoft.com/en-us/windows/win32/directcomp/basic-concepts
-
 
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
@@ -48,7 +46,7 @@ pub fn main() -> std::result::Result<(), Error> {
     // Ok(run_msg_loop()?)
 
     let twindow = window.clone();
-    let msg_loop_thread = std::thread::spawn(move ||{
+    let msg_loop_thread = std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         twindow.create_image().expect("create image failed");
         std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -57,14 +55,20 @@ pub fn main() -> std::result::Result<(), Error> {
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
         {
-            let geometry = DrawGeometry::hollow(10.0, 10.0).line(100.0, 100.0).closed();
-            let color = Color{r: 255, g: 128, b: 128, a: 255};
-            let stroke = Stroke {
-                color,
-                width: 3.0,
+            let geometry = DrawGeometry::hollow(200.0, 10.0)
+                .line(100.0, 100.0)
+                .closed();
+            let color = Color {
+                r: 255,
+                g: 0,
+                b: 255,
+                a: 255,
             };
+            let stroke = Stroke { color, width: 30.0 };
 
-            let v = twindow.draw_geometry(&geometry, &stroke).expect("create image failed");
+            let v = twindow
+                .draw_geometry(&geometry, &stroke)
+                .expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
         std::thread::sleep(std::time::Duration::from_millis(1000000));
@@ -96,7 +100,7 @@ struct OverlayImpl {
     elements: Vec<DrawElement>,
 }
 // Is this legal?
-unsafe impl Send for OverlayImpl{}
+unsafe impl Send for OverlayImpl {}
 
 fn run_msg_loop() -> Result<()> {
     unsafe {
@@ -108,7 +112,6 @@ fn run_msg_loop() -> Result<()> {
         Ok(())
     }
 }
-
 
 impl OverlayImpl {
     fn new() -> Result<Self> {
@@ -252,7 +255,10 @@ impl OverlayImpl {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(100.0)?;
             visual.SetOffsetY2(100.0)?;
-            self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
+            self.root_visual
+                .as_ref()
+                .unwrap()
+                .AddVisual(&visual, false, None)?;
             /*
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
             visual.SetContent(&surface)?;
@@ -277,7 +283,10 @@ impl OverlayImpl {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(100.0)?;
             visual.SetOffsetY2(100.0)?;
-            self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
+            self.root_visual
+                .as_ref()
+                .unwrap()
+                .AddVisual(&visual, false, None)?;
             let width = 100.0;
             let height = 100.0;
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
@@ -295,23 +304,22 @@ impl OverlayImpl {
                 a: 0.0,
             }));
 
-            let p0 = D2D_POINT_2F{
-                x: 0.0,
-                y: 0.0
-            };
-            let p1 = D2D_POINT_2F{
+            let p0 = D2D_POINT_2F { x: 0.0, y: 0.0 };
+            let p1 = D2D_POINT_2F {
                 x: 1000.0,
-                y: 1000.0
+                y: 1000.0,
             };
-            let brush: ID2D1Brush = dc.CreateSolidColorBrush(
-                &D2D1_COLOR_F {
-                    r: 1.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 1.0,
-                },
-                None,
-            )?.cast()?;
+            let brush: ID2D1Brush = dc
+                .CreateSolidColorBrush(
+                    &D2D1_COLOR_F {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                    None,
+                )?
+                .cast()?;
             let strokewidth = 5.0;
 
             let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
@@ -333,12 +341,9 @@ impl OverlayImpl {
             self.elements.push(element);
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
-            
             Ok(visual.clone())
-
         }
     }
-
 
     fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
@@ -346,7 +351,10 @@ impl OverlayImpl {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(0.0)?;
             visual.SetOffsetY2(0.0)?;
-            self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
+            self.root_visual
+                .as_ref()
+                .unwrap()
+                .AddVisual(&visual, false, None)?;
             let width = 1000.0;
             let height = 1000.0;
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
@@ -365,22 +373,22 @@ impl OverlayImpl {
             }));
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
-            let sink : ID2D1SimplifiedGeometrySink  = path_geom.Open()?.cast()?;
+            let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
             for el in geometry.elements.iter() {
                 match el {
-                    GeometryElement::Start{start, filled} => {
+                    GeometryElement::Start { start, filled } => {
                         let start_style = if *filled {
                             D2D1_FIGURE_BEGIN_FILLED
                         } else {
                             D2D1_FIGURE_BEGIN_HOLLOW
                         };
                         sink.BeginFigure((*start).into(), start_style);
-                    },
-                    GeometryElement::End{closed} => {
+                    }
+                    GeometryElement::End { closed } => {
                         let close_style = if *closed {
                             D2D1_FIGURE_END_CLOSED
                         } else {
-                            D2D1_FIGURE_END_OPEN 
+                            D2D1_FIGURE_END_OPEN
                         };
                         sink.EndFigure(close_style);
                     }
@@ -391,11 +399,10 @@ impl OverlayImpl {
                 }
             }
             sink.Close()?;
-            
-            let brush: ID2D1Brush = dc.CreateSolidColorBrush(
-                &stroke.color.into(),
-                None,
-            )?.cast()?;
+
+            let brush: ID2D1Brush = dc
+                .CreateSolidColorBrush(&stroke.color.into(), None)?
+                .cast()?;
             let strokewidth = stroke.width;
 
             let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
@@ -408,16 +415,11 @@ impl OverlayImpl {
 
             surface.EndDraw();
 
-
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
             Ok(visual.clone())
-
         }
-
-
     }
-
 
     fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
@@ -527,9 +529,6 @@ impl OverlayImpl {
         }
     }
 }
-
-
-
 
 fn create_text_format() -> Result<IDWriteTextFormat> {
     unsafe {
@@ -708,7 +707,7 @@ fn draw_card_back(
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-struct VisualToken{
+struct VisualToken {
     overlay: Arc<Mutex<OverlayImpl>>,
     visual: IDVisual,
 }
@@ -716,7 +715,9 @@ struct VisualToken{
 impl Drop for VisualToken {
     fn drop(&mut self) {
         let mut wlock = self.overlay.lock();
-        wlock.remove_visual(&self.visual).expect("removing something thats already removed");
+        wlock
+            .remove_visual(&self.visual)
+            .expect("removing something thats already removed");
     }
 }
 
@@ -726,7 +727,7 @@ pub struct Overlay {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Color{
+struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
@@ -741,78 +742,75 @@ impl From<Color> for D2D1_COLOR_F {
             a: c.a as f32 / 255.0,
         }
     }
-
 }
 
-
 #[derive(Copy, Clone, Debug)]
-struct Stroke{
+struct Stroke {
     pub color: Color,
     pub width: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Point{
+struct Point {
     pub x: f32,
     pub y: f32,
 }
 impl From<Point> for D2D_POINT_2F {
     fn from(p: Point) -> Self {
-        D2D_POINT_2F {
-            x: p.x,
-            y: p.y,
-        }
+        D2D_POINT_2F { x: p.x, y: p.y }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum CircleDirection{
+pub enum CircleDirection {
     CounterClockWise,
     ClockWise,
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum GeometryElement{
-    Start{
+pub enum GeometryElement {
+    Start {
         start: Point,
         filled: bool,
     },
     Line(Point),
-    Arc{
-        end_point: Point, 
+    Arc {
+        end_point: Point,
         radius: f32, // in degrees!?!?!
         angle: f32,
         direction: CircleDirection,
         // arc size??
     },
-    End{closed: bool}
+    End {
+        closed: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
-struct DrawGeometry{
-    pub elements: Vec<GeometryElement>
+struct DrawGeometry {
+    pub elements: Vec<GeometryElement>,
 }
 impl DrawGeometry {
     fn appended(self, e: GeometryElement) -> Self {
         let mut elements = self.elements;
         elements.push(e);
-        Self {
-            elements
-        }
+        Self { elements }
     }
     pub fn hollow(x: f32, y: f32) -> Self {
         Self {
-            elements: vec![GeometryElement::Start{start: Point{x,y}, filled: false}]
+            elements: vec![GeometryElement::Start {
+                start: Point { x, y },
+                filled: false,
+            }],
         }
     }
     pub fn closed(self) -> Self {
-        self.appended(GeometryElement::End{closed: true})
+        self.appended(GeometryElement::End { closed: true })
     }
     pub fn line(self, x: f32, y: f32) -> Self {
-        self.appended(GeometryElement::Line(Point{x, y}))
+        self.appended(GeometryElement::Line(Point { x, y }))
     }
 }
-
 
 impl Overlay {
     pub fn new() -> std::result::Result<Overlay, Error> {
@@ -822,9 +820,7 @@ impl Overlay {
             wlock.create_window()?;
             wlock.create_device_resources()?;
         }
-        Ok(Self{
-            overlay: window
-        })
+        Ok(Self { overlay: window })
     }
 
     pub fn create_image(&self) -> std::result::Result<(), Error> {
@@ -856,6 +852,3 @@ impl Overlay {
         }
     }
 }
-
-
-
