@@ -48,6 +48,8 @@ pub fn main() -> std::result::Result<(), Error> {
     let msg_loop_thread = std::thread::spawn(move ||{
         std::thread::sleep(std::time::Duration::from_millis(1000));
         twindow.create_image().expect("create image failed");
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        twindow.draw_line().expect("create image failed");
         std::thread::sleep(std::time::Duration::from_millis(1000000));
         
         
@@ -75,6 +77,7 @@ struct OverlayImpl {
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
     root_visual: Option<IDCompositionVisual2>,
+    factory: Option<ID2D1Factory1>,
     elements: Vec<DrawElement>,
 }
 // Is this legal?
@@ -110,6 +113,7 @@ impl OverlayImpl {
                 device: None,
                 desktop: None,
                 target: None,
+                factory: None,
                 root_visual: None,
                 elements: vec![],
             })
@@ -216,6 +220,14 @@ impl OverlayImpl {
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
+
+            let mut options = D2D1_FACTORY_OPTIONS::default();
+            let factory = D2D1CreateFactory(
+                D2D1_FACTORY_TYPE_MULTI_THREADED,
+                Some(&options),
+            )?;
+            self.factory = Some(factory);
+
             Ok(())
         }
     }
@@ -249,7 +261,73 @@ impl OverlayImpl {
 
             Ok(())
         }
+    }
 
+    fn draw_line(&mut self) -> Result<()> {
+        // Objects used together must be created from the same factory instance.
+        unsafe {
+
+            let visual = create_visual(self.desktop.as_ref().unwrap())?;
+            visual.SetOffsetX2(100.0)?;
+            visual.SetOffsetY2(100.0)?;
+            self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
+            let width = 100.0;
+            let height = 100.0;
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            visual.SetContent(&surface)?;
+            // draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
+
+            let mut offset = Default::default();
+            let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
+
+            dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
+
+            dc.Clear(Some(&D2D1_COLOR_F {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.8,
+            }));
+
+            let p0 = D2D_POINT_2F{
+                x: 0.0,
+                y: 0.0
+            };
+            let p1 = D2D_POINT_2F{
+                x: 1000.0,
+                y: 1000.0
+            };
+            let brush: ID2D1Brush = dc.CreateSolidColorBrush(
+                &D2D1_COLOR_F {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                None,
+            )?.cast()?;
+            let strokewidth = 5.0;
+
+            let stroke_props = D2D1_STROKE_STYLE_PROPERTIES1 {
+                ..Default::default()
+            };
+            let stroke_style = self.factory.as_ref().unwrap().CreateStrokeStyle(&stroke_props, None)?;
+
+            dc.DrawLine(p0, p1, &brush, strokewidth, &stroke_style);
+
+            surface.EndDraw();
+
+            // visual.SetContent(surface)?;
+            let element = DrawElement {
+                position: (0.0, 0.0),
+                visual,
+                surface: surface.clone(),
+            };
+            self.elements.push(element);
+            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+            Ok(())
+
+        }
     }
 
     fn paint_handler(&mut self) -> Result<()> {
@@ -554,4 +632,14 @@ impl Overlay {
             Ok(wlock.create_image()?)
         }
     }
+
+    pub fn draw_line(&self) -> std::result::Result<(), Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            Ok(wlock.draw_line()?)
+        }
+    }
 }
+
+
+
