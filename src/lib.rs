@@ -46,14 +46,12 @@ pub fn main() -> std::result::Result<(), Error> {
 
     let twindow = window.clone();
     let msg_loop_thread = std::thread::spawn(move ||{
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        twindow.create_image().expect("create image failed");
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        twindow.draw_line().expect("create image failed");
-        std::thread::sleep(std::time::Duration::from_millis(1000000));
-        
-        
     });
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    twindow.create_image().expect("create image failed");
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    twindow.draw_line().expect("create image failed");
+    std::thread::sleep(std::time::Duration::from_millis(1000000));
     Ok(run_msg_loop()?)
 
     // Ok(())
@@ -224,6 +222,7 @@ impl OverlayImpl {
             let mut options = D2D1_FACTORY_OPTIONS::default();
             let factory = D2D1CreateFactory(
                 D2D1_FACTORY_TYPE_MULTI_THREADED,
+                // D2D1_FACTORY_TYPE_SINGLE_THREADED,
                 Some(&options),
             )?;
             self.factory = Some(factory);
@@ -271,10 +270,19 @@ impl OverlayImpl {
             visual.SetOffsetX2(100.0)?;
             visual.SetOffsetY2(100.0)?;
             self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
-            let width = 100.0;
-            let height = 100.0;
+            // let width = 100.0;
+            // let height = 100.0;
+            // let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            // visual.SetContent(&surface)?;
+
+
+            /*
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
             visual.SetContent(&surface)?;
+            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;*/
+            let surface = &self.elements[0].surface;
+            visual.SetContent(surface)?;
+
             // draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
 
             let mut offset = Default::default();
@@ -308,10 +316,11 @@ impl OverlayImpl {
             )?.cast()?;
             let strokewidth = 5.0;
 
-            let stroke_props = D2D1_STROKE_STYLE_PROPERTIES1 {
+            let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
                 ..Default::default()
             };
-            let stroke_style = self.factory.as_ref().unwrap().CreateStrokeStyle(&stroke_props, None)?;
+            // let stroke_style = self.factory.as_ref().unwrap().CreateStrokeStyle(&stroke_props, None)?;
+            let stroke_style = dc.GetFactory()?.CreateStrokeStyle(&stroke_props, None)?;
 
             dc.DrawLine(p0, p1, &brush, strokewidth, &stroke_style);
 
@@ -620,6 +629,7 @@ impl Overlay {
         {
             let mut wlock = window.lock();
             wlock.create_window()?;
+            wlock.create_device_resources()?;
         }
         Ok(Self{
             overlay: window
