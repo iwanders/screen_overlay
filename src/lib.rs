@@ -75,7 +75,6 @@ struct OverlayImpl {
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
     root_visual: Option<IDCompositionVisual2>,
-    factory: Option<ID2D1Factory1>,
     elements: Vec<DrawElement>,
 }
 // Is this legal?
@@ -111,7 +110,7 @@ impl OverlayImpl {
                 device: None,
                 desktop: None,
                 target: None,
-                factory: None,
+                // factory: None,
                 root_visual: None,
                 elements: vec![],
             })
@@ -218,14 +217,6 @@ impl OverlayImpl {
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
-
-            let mut options = D2D1_FACTORY_OPTIONS::default();
-            let factory = D2D1CreateFactory(
-                D2D1_FACTORY_TYPE_MULTI_THREADED,
-                // D2D1_FACTORY_TYPE_SINGLE_THREADED,
-                Some(&options),
-            )?;
-            self.factory = Some(factory);
 
             Ok(())
         }
