@@ -222,6 +222,14 @@ pub fn main() -> std::result::Result<(), Error> {
 
     let twindow = window.clone();
     let msg_loop_thread = std::thread::spawn(move || {
+
+        let image2 = twindow.load_texture(std::path::PathBuf::from("PNG_transparency_demonstration_1.png")).expect("failed to load image");
+        let t2 = twindow.draw_texture(&Point::new(500.0, 500.0), &image2, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
+
+        let image = twindow.load_texture(std::path::PathBuf::from("image.jpg")).expect("failed to load image");
+        let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
+
+
         std::thread::sleep(std::time::Duration::from_millis(1000));
         twindow.create_image().expect("create image failed");
         std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -229,7 +237,7 @@ pub fn main() -> std::result::Result<(), Error> {
             let v = twindow.draw_line().expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
-        if false {
+        let z =   {
             let geometry = DrawGeometry::hollow(200.0, 10.0)
                 .line(100.0, 100.0)
                 .closed();
@@ -245,7 +253,8 @@ pub fn main() -> std::result::Result<(), Error> {
                 .draw_geometry(&geometry, &stroke)
                 .expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(500));
-        }
+            v
+        };
         if false {
             let color = Color {
                 r: 255,
@@ -255,12 +264,6 @@ pub fn main() -> std::result::Result<(), Error> {
             };
             let v = twindow.draw_text("hello", &Rect::from(200.0, 200.0).sized(600.0, 300.0), &color).expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(1000));
-        }
-        if true {
-            let image = twindow.load_texture(std::path::PathBuf::from("image.jpg")).expect("failed to load image");
-            let t = twindow.draw_texture(&Point::new(500.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
-            println!("image block");
-            std::thread::sleep(std::time::Duration::from_millis(10000));
         }
         println!("blocking now");
         std::thread::sleep(std::time::Duration::from_millis(1000000));

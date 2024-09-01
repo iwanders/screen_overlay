@@ -198,6 +198,7 @@ impl OverlayImpl {
             self.root_visual = Some(root_visual.clone());
             self.target = Some(target);
 
+            /*
             let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
             dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
 
@@ -229,6 +230,7 @@ impl OverlayImpl {
                 surface,
             };
             self.elements.push(element);
+            */
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
@@ -238,6 +240,7 @@ impl OverlayImpl {
     }
 
     pub fn create_image(&mut self) -> Result<()> {
+        return Ok(());
         unsafe {
             // let device_2d = create_device_2d(self.device.as_ref().unwrap())?;
             // let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
@@ -482,6 +485,7 @@ impl OverlayImpl {
             println!("windows string: {windows_string:?}");
             let z = PCWSTR::from_raw(windows_string.as_ptr());
 
+            // https://learn.microsoft.com/en-us/windows/win32/wic/-wic-bitmapsources
             let decoder = factory.CreateDecoderFromFilename(
                 z,
                 None,
@@ -494,13 +498,14 @@ impl OverlayImpl {
 
             image.Initialize(
                 &source,
-                &GUID_WICPixelFormat32bppBGR,
+                &GUID_WICPixelFormat32bppPBGRA , // not GUID_WICPixelFormat32bppBGRA; https://stackoverflow.com/a/25009124
                 WICBitmapDitherTypeNone,
                 None,
                 0.0,
                 WICBitmapPaletteTypeMedianCut,
             )?;
             let image = Arc::new(image);
+            println!("bitmap good");
 
             Ok(ImageTexture{image})
         }
@@ -522,7 +527,25 @@ impl OverlayImpl {
             let mut dc_offset = Default::default();
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut dc_offset)?;
 
-            let bitmap = dc.CreateBitmapFromWicBitmap(&*(*texture).image, None)?;
+            // dc.Clear(Some(&D2D1_COLOR_F {
+                // r: 1.0,
+                // g: 1.0,
+                // b: 1.0,
+                // a: 0.0,
+            // }));
+
+            println!("Convert image to bitmap");
+            let properties = D2D1_BITMAP_PROPERTIES1  {
+                pixelFormat: D2D1_PIXEL_FORMAT  {
+                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                    // ..Default::default()
+                },
+                ..Default::default()
+            };
+            let bitmap = dc.CreateBitmapFromWicBitmap(&*(*texture).image, Some(&properties))?;
+
+            println!("below  image to bitmap");
             dc.SetTransform(&Matrix3x2::translation(
                 dc_offset.x as f32,
                 dc_offset.y as f32,
@@ -532,7 +555,7 @@ impl OverlayImpl {
             dc.DrawBitmap(
                 &bitmap,
                 None,
-                0.5, // alpha
+                1.0, // alpha
                 D2D1_INTERPOLATION_MODE_LINEAR,
                 Some(&D2D_RECT_F {
                     left: texture_region.min.x,
