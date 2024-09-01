@@ -46,12 +46,12 @@ pub fn main() -> std::result::Result<(), Error> {
 
     let twindow = window.clone();
     let msg_loop_thread = std::thread::spawn(move ||{
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        twindow.create_image().expect("create image failed");
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        twindow.draw_line().expect("create image failed");
+        std::thread::sleep(std::time::Duration::from_millis(1000000));
     });
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    twindow.create_image().expect("create image failed");
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    twindow.draw_line().expect("create image failed");
-    std::thread::sleep(std::time::Duration::from_millis(1000000));
     Ok(run_msg_loop()?)
 
     // Ok(())
