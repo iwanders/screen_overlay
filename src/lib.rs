@@ -52,7 +52,7 @@ pub fn main() -> std::result::Result<(), Error> {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         {
             let v = twindow.draw_line().expect("create image failed");
-            std::thread::sleep(std::time::Duration::from_millis(1000));
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
         {
             let geometry = DrawGeometry::hollow(200.0, 10.0)
@@ -69,6 +69,16 @@ pub fn main() -> std::result::Result<(), Error> {
             let v = twindow
                 .draw_geometry(&geometry, &stroke)
                 .expect("create image failed");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        {
+            let color = Color {
+                r: 255,
+                g: 0,
+                b: 255,
+                a: 255,
+            };
+            let v = twindow.draw_text("hello", &Rect::from(200.0, 200.0).sized(600.0, 300.0), &color).expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
         std::thread::sleep(std::time::Duration::from_millis(1000000));
@@ -421,10 +431,63 @@ impl OverlayImpl {
         }
     }
 
+    fn draw_text(&mut self, text: &str, layout: &Rect, color: &Color) -> Result<IDVisual> {
+        unsafe {
+            let visual = create_visual(self.desktop.as_ref().unwrap())?;
+            visual.SetOffsetX2(0.0)?;
+            visual.SetOffsetY2(0.0)?;
+            self.root_visual
+                .as_ref()
+                .unwrap()
+                .AddVisual(&visual, false, None)?;
+            let width = layout.width();
+            let height = layout.height();
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            visual.SetContent(&surface)?;
+
+            let mut offset = Default::default();
+            let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
+
+            dc.SetTransform(&Matrix3x2::translation(layout.min.x, layout.min.y));
+
+            dc.Clear(Some(&D2D1_COLOR_F {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            }));
+
+            let format = create_text_format()?;
+
+            let brush: ID2D1Brush = dc
+                .CreateSolidColorBrush(&(*color).into(), None)?
+                .cast()?;
+            use std::os::windows::ffi::OsStrExt;
+            let windows_string: Vec<u16> = std::ffi::OsStr::new(text).encode_wide().collect();
+            dc.DrawText(
+                &windows_string,
+                &format,
+                &D2D_RECT_F {
+                    left: 0.0,
+                    top: 0.0,
+                    right: width,
+                    bottom: height,
+                },
+                &brush,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+                DWRITE_MEASURING_MODE_NATURAL,
+            );
+
+            surface.EndDraw();
+            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+
+            Ok(visual.clone())
+        }
+    }
+
     fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
             self.root_visual.as_ref().unwrap().RemoveVisual(visual)?;
-            // self.root_visual.as_ref().unwrap().RemoveAllVisuals()?;
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
         }
         Ok(())
@@ -755,11 +818,65 @@ struct Point {
     pub x: f32,
     pub y: f32,
 }
+impl Point {
+    const ORIGIN: Point = Point{x: 0.0, y: 0.0};
+    pub fn new(x: f32, y: f32) -> Self {
+        Self{x, y        }
+    }
+}
+impl std::ops::Add<Point> for Point {
+    type Output = Point;
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
 impl From<Point> for D2D_POINT_2F {
     fn from(p: Point) -> Self {
         D2D_POINT_2F { x: p.x, y: p.y }
     }
 }
+
+#[derive(Copy, Clone, Debug)]
+struct Rect{
+    min: Point,
+    max: Point,
+}
+impl Rect {
+    pub fn from(x: f32, y: f32) -> Self {
+        Self {
+            min: Point{x, y},
+            max: Point::ORIGIN
+        }
+    }
+    pub fn sized(self, w: f32, h: f32) -> Self{
+        Self {
+            min: self.min,
+            max: self.min + Point::new(w,h)
+        }
+    }
+    pub fn width(&self) -> f32 {
+        self.max.x - self.min.x
+    }
+    pub fn height(&self) -> f32 {
+        self.max.y - self.min.y
+    }
+}
+
+impl From<Rect> for D2D_RECT_F {
+    fn from(r: Rect) -> Self {
+        D2D_RECT_F {
+            left: r.min.x,
+            top: r.min.y,
+            right: r.max.x,
+            bottom: r.max.y
+        }
+    }
+}
+
+
 
 #[derive(Copy, Clone, Debug)]
 pub enum CircleDirection {
@@ -845,6 +962,17 @@ impl Overlay {
         {
             let mut wlock = self.overlay.lock();
             let visual = wlock.draw_geometry(geometry, stroke)?;
+            Ok(VisualToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
+        }
+    }
+
+    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color) -> Result<VisualToken> {
+        {
+            let mut wlock = self.overlay.lock();
+            let visual = wlock.draw_text(text, layout, color)?;
             Ok(VisualToken {
                 visual,
                 overlay: self.overlay.clone(),
