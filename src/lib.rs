@@ -34,6 +34,9 @@ use std::sync::Arc;
 //  - Need a wrapper with an interior Arc.
 
 
+// THis is helpful; https://learn.microsoft.com/en-us/windows/win32/directcomp/basic-concepts
+
+
 const CARD_WIDTH: f32 = 150.0;
 const CARD_HEIGHT: f32 = 210.0;
 
@@ -49,7 +52,10 @@ pub fn main() -> std::result::Result<(), Error> {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         twindow.create_image().expect("create image failed");
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        twindow.draw_line().expect("create image failed");
+        {
+            let v = twindow.draw_line().expect("create image failed");
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
         std::thread::sleep(std::time::Duration::from_millis(1000000));
     });
     Ok(run_msg_loop()?)
@@ -59,9 +65,10 @@ pub fn main() -> std::result::Result<(), Error> {
 
 // The IDCompositionVisual appears to be a tree, as per;
 // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
+type IDVisual = IDCompositionVisual2;
 struct DrawElement {
     position: (f32, f32),
-    visual: IDCompositionVisual2,
+    visual: IDVisual,
     surface: IDCompositionSurface,
 }
 
@@ -253,7 +260,7 @@ impl OverlayImpl {
         }
     }
 
-    fn draw_line(&mut self) -> Result<()> {
+    fn draw_line(&mut self) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
 
@@ -265,16 +272,6 @@ impl OverlayImpl {
             let height = 100.0;
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
             visual.SetContent(&surface)?;
-
-
-            /*
-            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
-            visual.SetContent(&surface)?;
-            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;*/
-            // let surface = &self.elements[0].surface;
-            // visual.SetContent(surface)?;
-
-            // draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
 
             let mut offset = Default::default();
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
@@ -320,14 +317,25 @@ impl OverlayImpl {
             // visual.SetContent(surface)?;
             let element = DrawElement {
                 position: (0.0, 0.0),
-                visual,
+                visual: visual.clone(),
                 surface: surface.clone(),
             };
             self.elements.push(element);
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
-            Ok(())
+
+            
+            Ok(visual.clone())
 
         }
+    }
+
+    fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
+        unsafe {
+            self.root_visual.as_ref().unwrap().RemoveVisual(visual)?;
+            // self.root_visual.as_ref().unwrap().RemoveAllVisuals()?;
+            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+        }
+        Ok(())
     }
 
     fn paint_handler(&mut self) -> Result<()> {
@@ -610,6 +618,18 @@ fn draw_card_back(
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+struct LineToken{
+    overlay: Arc<Mutex<OverlayImpl>>,
+    visual: IDVisual,
+}
+impl Drop for LineToken {
+    fn drop(&mut self) {
+        println!("Dropping the line");
+        let mut wlock = self.overlay.lock();
+        wlock.remove_visual(&self.visual).expect("removing something thats already removed");
+    }
+}
+
 #[derive(Clone)]
 pub struct Overlay {
     overlay: Arc<Mutex<OverlayImpl>>,
@@ -634,10 +654,14 @@ impl Overlay {
         }
     }
 
-    pub fn draw_line(&self) -> std::result::Result<(), Error> {
+    pub fn draw_line(&self) -> std::result::Result<LineToken, Error> {
         {
             let mut wlock = self.overlay.lock();
-            Ok(wlock.draw_line()?)
+            let visual = wlock.draw_line()?;
+            Ok(LineToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
         }
     }
 }
