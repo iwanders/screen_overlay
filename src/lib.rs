@@ -270,18 +270,18 @@ impl OverlayImpl {
             visual.SetOffsetX2(100.0)?;
             visual.SetOffsetY2(100.0)?;
             self.root_visual.as_ref().unwrap().AddVisual(&visual, false, None)?;
-            // let width = 100.0;
-            // let height = 100.0;
-            // let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
-            // visual.SetContent(&surface)?;
+            let width = 100.0;
+            let height = 100.0;
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            visual.SetContent(&surface)?;
 
 
             /*
             let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
             visual.SetContent(&surface)?;
             draw_card_back(&surface, &bitmap, (150.0, 150.0))?;*/
-            let surface = &self.elements[0].surface;
-            visual.SetContent(surface)?;
+            // let surface = &self.elements[0].surface;
+            // visual.SetContent(surface)?;
 
             // draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
 
@@ -294,7 +294,7 @@ impl OverlayImpl {
                 r: 1.0,
                 g: 1.0,
                 b: 1.0,
-                a: 0.8,
+                a: 0.0,
             }));
 
             let p0 = D2D_POINT_2F{
