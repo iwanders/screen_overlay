@@ -8,11 +8,9 @@ use std::sync::Arc;
 //  - Should be thread safe (all of it)
 //  - Need a wrapper with an interior Arc.
 
-// THis is helpful; https://learn.microsoft.com/en-us/windows/win32/directcomp/basic-concepts
 
 mod windows;
-use windows::{OverlayImpl, IDVisual};
-
+use windows::{OverlayImpl, IDVisual, ImageTexture};
 
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -35,6 +33,75 @@ impl Drop for VisualToken {
 pub struct Overlay {
     overlay: Arc<Mutex<OverlayImpl>>,
 }
+
+impl Overlay {
+    pub fn new() -> std::result::Result<Overlay, Error> {
+        let window = Arc::new(Mutex::new(OverlayImpl::new()?));
+        {
+            let mut wlock = window.lock();
+            wlock.create_window()?;
+            wlock.create_device_resources()?;
+        }
+        Ok(Self { overlay: window })
+    }
+
+    pub fn create_image(&self) -> std::result::Result<(), Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            Ok(wlock.create_image()?)
+        }
+    }
+
+    pub fn draw_line(&self) -> std::result::Result<VisualToken, Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            let visual = wlock.draw_line()?;
+            Ok(VisualToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
+        }
+    }
+
+    pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            let visual = wlock.draw_geometry(geometry, stroke)?;
+            Ok(VisualToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
+        }
+    }
+
+    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color) -> std::result::Result<VisualToken, Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            let visual = wlock.draw_text(text, layout, color)?;
+            Ok(VisualToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
+        }
+    }
+    pub fn load_texture<P: AsRef<std::path::Path>>(&self, path: P) -> std::result::Result<ImageTexture, Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            Ok(wlock.load_texture(path)?)
+        }
+    }
+    pub fn draw_texture(&self, position: &Point, texture: &ImageTexture, texture_region: &Rect) -> std::result::Result<VisualToken, Error> {
+        {
+            let mut wlock = self.overlay.lock();
+            let visual = wlock.draw_texture(position, texture, texture_region)?;
+            Ok(VisualToken {
+                visual,
+                overlay: self.overlay.clone(),
+            })
+        }
+    }
+}
+
 
 #[derive(Copy, Clone, Debug)]
 struct Color {
@@ -148,75 +215,21 @@ impl DrawGeometry {
     }
 }
 
-impl Overlay {
-    pub fn new() -> std::result::Result<Overlay, Error> {
-        let window = Arc::new(Mutex::new(OverlayImpl::new()?));
-        {
-            let mut wlock = window.lock();
-            wlock.create_window()?;
-            wlock.create_device_resources()?;
-        }
-        Ok(Self { overlay: window })
-    }
-
-    pub fn create_image(&self) -> std::result::Result<(), Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            Ok(wlock.create_image()?)
-        }
-    }
-
-    pub fn draw_line(&self) -> std::result::Result<VisualToken, Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_line()?;
-            Ok(VisualToken {
-                visual,
-                overlay: self.overlay.clone(),
-            })
-        }
-    }
-
-    pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_geometry(geometry, stroke)?;
-            Ok(VisualToken {
-                visual,
-                overlay: self.overlay.clone(),
-            })
-        }
-    }
-
-    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color) -> std::result::Result<VisualToken, Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_text(text, layout, color)?;
-            Ok(VisualToken {
-                visual,
-                overlay: self.overlay.clone(),
-            })
-        }
-    }
-}
-
-
-
 pub fn main() -> std::result::Result<(), Error> {
     windows::setup()?;
     let window = Overlay::new()?;
-    // Ok(run_msg_loop()?)
+
 
     let twindow = window.clone();
     let msg_loop_thread = std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         twindow.create_image().expect("create image failed");
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        {
+        if true {
             let v = twindow.draw_line().expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
-        {
+        if false {
             let geometry = DrawGeometry::hollow(200.0, 10.0)
                 .line(100.0, 100.0)
                 .closed();
@@ -233,7 +246,7 @@ pub fn main() -> std::result::Result<(), Error> {
                 .expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
-        {
+        if false {
             let color = Color {
                 r: 255,
                 g: 0,
@@ -243,6 +256,13 @@ pub fn main() -> std::result::Result<(), Error> {
             let v = twindow.draw_text("hello", &Rect::from(200.0, 200.0).sized(600.0, 300.0), &color).expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
+        if true {
+            let image = twindow.load_texture(std::path::PathBuf::from("image.jpg")).expect("failed to load image");
+            let t = twindow.draw_texture(&Point::new(500.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
+            println!("image block");
+            std::thread::sleep(std::time::Duration::from_millis(10000));
+        }
+        println!("blocking now");
         std::thread::sleep(std::time::Duration::from_millis(1000000));
     });
     Ok(windows::run_msg_loop()?)

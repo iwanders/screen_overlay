@@ -25,7 +25,19 @@ use windows::{
 
 use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement};
 
+use std::sync::Arc;
 
+// This is helpful; https://learn.microsoft.com/en-us/windows/win32/directcomp/basic-concepts
+
+#[derive(Clone)]
+pub struct ImageTexture {
+    image: Arc<IWICFormatConverter>,
+}
+impl std::fmt::Debug for ImageTexture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "ImageTexture {:?}", &self)
+    }
+}
 
 impl From<Color> for D2D1_COLOR_F {
     fn from(c: Color) -> Self {
@@ -435,7 +447,7 @@ impl OverlayImpl {
                 .CreateSolidColorBrush(&(*color).into(), None)?
                 .cast()?;
             use std::os::windows::ffi::OsStrExt;
-            let windows_string: Vec<u16> = std::ffi::OsStr::new(text).encode_wide().collect();
+            let windows_string: Vec<u16> = std::ffi::OsStr::new(text).encode_wide().chain([0u16].iter().copied()).collect();
             dc.DrawText(
                 &windows_string,
                 &format,
@@ -456,6 +468,88 @@ impl OverlayImpl {
             Ok(visual.clone())
         }
     }
+
+
+    pub fn load_texture<P: AsRef<std::path::Path>>(&mut self, path: P) -> Result<ImageTexture> {
+        unsafe {
+            // This should create a singleton.
+            let factory: IWICImagingFactory2 =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
+
+            let path : std::path::PathBuf = std::path::PathBuf::from(path.as_ref());
+            use std::os::windows::ffi::OsStrExt;
+            let windows_string: Vec<u16>  = std::ffi::OsString::from(&path).encode_wide().chain([0u16].iter().copied()).collect();
+            println!("windows string: {windows_string:?}");
+            let z = PCWSTR::from_raw(windows_string.as_ptr());
+
+            let decoder = factory.CreateDecoderFromFilename(
+                z,
+                None,
+                GENERIC_READ,
+                WICDecodeMetadataCacheOnDemand,
+            )?;
+
+            let source = decoder.GetFrame(0)?;
+            let image = factory.CreateFormatConverter()?;
+
+            image.Initialize(
+                &source,
+                &GUID_WICPixelFormat32bppBGR,
+                WICBitmapDitherTypeNone,
+                None,
+                0.0,
+                WICBitmapPaletteTypeMedianCut,
+            )?;
+            let image = Arc::new(image);
+
+            Ok(ImageTexture{image})
+        }
+    }
+    pub fn draw_texture(&mut self, position: &Point, texture: &ImageTexture, texture_region: &Rect) -> Result<IDVisual> {
+        unsafe {
+            let visual = create_visual(self.desktop.as_ref().unwrap())?;
+            visual.SetOffsetX2(position.x)?;
+            visual.SetOffsetY2(position.y)?;
+            self.root_visual
+                .as_ref()
+                .unwrap()
+                .AddVisual(&visual, false, None)?;
+            let width = texture_region.width();
+            let height = texture_region.height();
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
+            visual.SetContent(&surface)?;
+
+            let mut dc_offset = Default::default();
+            let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut dc_offset)?;
+
+            let bitmap = dc.CreateBitmapFromWicBitmap(&*(*texture).image, None)?;
+            dc.SetTransform(&Matrix3x2::translation(
+                dc_offset.x as f32,
+                dc_offset.y as f32,
+            ));
+
+
+            dc.DrawBitmap(
+                &bitmap,
+                None,
+                0.5, // alpha
+                D2D1_INTERPOLATION_MODE_LINEAR,
+                Some(&D2D_RECT_F {
+                    left: texture_region.min.x,
+                    top: texture_region.min.y,
+                    right: texture_region.max.x,
+                    bottom: texture_region.max.y,
+                }),
+                None,
+            );
+
+            surface.EndDraw();
+            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+            Ok(visual.clone())
+        }
+
+    }
+
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
