@@ -220,9 +220,14 @@ impl OverlayImpl {
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
             let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
+            let mut is_started: bool  = false;
             for el in geometry.elements.iter() {
                 match el {
                     GeometryElement::Start { start, filled } => {
+                        if is_started {
+                            return Err(Error::new(ERROR_CANCELLED.into(), "cant open geometry if one is already open"));
+                        }
+                        is_started = true;
                         let start_style = if *filled {
                             D2D1_FIGURE_BEGIN_FILLED
                         } else {
@@ -231,6 +236,11 @@ impl OverlayImpl {
                         sink.BeginFigure((*start).into(), start_style);
                     }
                     GeometryElement::End { closed } => {
+                        if !is_started {
+                            return Err(Error::new(ERROR_CANCELLED.into(), "cant close geometry if it is not open"));
+                        }
+                        is_started = false;
+                        
                         let close_style = if *closed {
                             D2D1_FIGURE_END_CLOSED
                         } else {
