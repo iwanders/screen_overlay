@@ -91,7 +91,6 @@ pub struct OverlayImpl {
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
     root_visual: Option<IDCompositionVisual2>,
-    elements: Vec<DrawElement>,
 }
 // Is this legal?
 unsafe impl Send for OverlayImpl {}
@@ -125,9 +124,7 @@ impl OverlayImpl {
                 device: None,
                 desktop: None,
                 target: None,
-                // factory: None,
                 root_visual: None,
-                elements: vec![],
             })
         }
     }
@@ -198,40 +195,6 @@ impl OverlayImpl {
             self.root_visual = Some(root_visual.clone());
             self.target = Some(target);
 
-            /*
-            let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-            dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
-
-            let font_brush = dc.CreateSolidColorBrush(
-                &D2D1_COLOR_F {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 1.0,
-                },
-                None,
-            )?;
-
-            let bitmap = dc.CreateBitmapFromWicBitmap(&self.image, None)?;
-            let width = CARD_WIDTH;
-            let height = CARD_HEIGHT;
-
-            let visual = create_visual(&desktop)?;
-            visual.SetOffsetX2(0.0)?;
-            visual.SetOffsetY2(0.0)?;
-            root_visual.AddVisual(&visual, false, None)?;
-            let surface = create_surface(&desktop, width, height)?;
-            visual.SetContent(&surface)?;
-            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;
-
-            let element = DrawElement {
-                position: (0.0, 0.0),
-                visual,
-                surface,
-            };
-            self.elements.push(element);
-            */
-
             desktop.Commit()?;
             self.desktop = Some(desktop);
 
@@ -256,18 +219,10 @@ impl OverlayImpl {
                 .as_ref()
                 .unwrap()
                 .AddVisual(&visual, false, None)?;
-            /*
-            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
-            visual.SetContent(&surface)?;
-            draw_card_back(&surface, &bitmap, (150.0, 150.0))?;*/
-            let surface = &self.elements[0].surface;
-            visual.SetContent(surface)?;
-            let element = DrawElement {
-                position: (0.0, 0.0),
-                visual,
-                surface: surface.clone(),
-            };
-            self.elements.push(element);
+
+            // let surface = &self.elements[0].surface;
+            // visual.SetContent(surface)?;
+
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
             Ok(())
@@ -329,13 +284,6 @@ impl OverlayImpl {
 
             surface.EndDraw();
 
-            // visual.SetContent(surface)?;
-            let element = DrawElement {
-                position: (0.0, 0.0),
-                visual: visual.clone(),
-                surface: surface.clone(),
-            };
-            self.elements.push(element);
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
             Ok(visual.clone())
