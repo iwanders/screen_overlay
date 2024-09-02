@@ -69,9 +69,6 @@ impl From<Rect> for D2D_RECT_F {
 
 
 
-const CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 210.0;
-
 // The IDCompositionVisual appears to be a tree, as per;
 // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
 pub type IDVisual = IDCompositionVisual2;
@@ -605,13 +602,14 @@ fn create_text_format() -> Result<IDWriteTextFormat> {
     unsafe {
         let factory: IDWriteFactory2 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
 
+        let font_height = 100.0;
         let format = factory.CreateTextFormat(
             w!("Candara"),
             None,
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            CARD_HEIGHT / 2.0,
+            font_height,
             w!("en"),
         )?;
 
@@ -668,77 +666,6 @@ fn create_surface(
     }
 }
 
-fn draw_card_front(
-    surface: &IDCompositionSurface,
-    value: u8,
-    format: &IDWriteTextFormat,
-    brush: &ID2D1SolidColorBrush,
-) -> Result<()> {
-    unsafe {
-        let mut offset = Default::default();
-        let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
-
-        dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
-
-        dc.Clear(Some(&D2D1_COLOR_F {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 0.8,
-        }));
-
-        dc.DrawText(
-            &[value as _],
-            format,
-            &D2D_RECT_F {
-                left: 0.0,
-                top: 0.0,
-                right: CARD_WIDTH,
-                bottom: CARD_HEIGHT,
-            },
-            brush,
-            D2D1_DRAW_TEXT_OPTIONS_NONE,
-            DWRITE_MEASURING_MODE_NATURAL,
-        );
-
-        surface.EndDraw()
-    }
-}
-
-fn draw_card_back(
-    surface: &IDCompositionSurface,
-    bitmap: &ID2D1Bitmap1,
-    offset: (f32, f32),
-) -> Result<()> {
-    unsafe {
-        let mut dc_offset = Default::default();
-        let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut dc_offset)?;
-
-        dc.SetTransform(&Matrix3x2::translation(
-            dc_offset.x as f32,
-            dc_offset.y as f32,
-        ));
-
-        let left = offset.0;
-        let top = offset.1;
-
-        dc.DrawBitmap(
-            bitmap,
-            None,
-            0.5, // alpha
-            D2D1_INTERPOLATION_MODE_LINEAR,
-            Some(&D2D_RECT_F {
-                left,
-                top,
-                right: left + CARD_WIDTH,
-                bottom: top + CARD_HEIGHT,
-            }),
-            None,
-        );
-
-        surface.EndDraw()
-    }
-}
 
 pub fn setup() -> Result<()> {
     unsafe {
