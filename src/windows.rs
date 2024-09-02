@@ -91,7 +91,6 @@ struct DrawElement {
 
 pub struct OverlayImpl {
     handle: HWND,
-    format: IDWriteTextFormat,
     device: Option<ID3D11Device>,
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
@@ -116,7 +115,6 @@ impl OverlayImpl {
         unsafe {
             Ok(Self {
                 handle: Default::default(),
-                format: create_text_format()?,
                 device: None,
                 desktop: None,
                 target: None,
@@ -399,12 +397,12 @@ impl OverlayImpl {
 
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
-            dc.Clear(Some(&D2D1_COLOR_F {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 0.0,
-            }));
+            // dc.Clear(Some(&D2D1_COLOR_F {
+                // r: 1.0,
+                // g: 1.0,
+                // b: 1.0,
+                // a: 0.0,
+            // }));
 
             // let format = create_text_format()?;
 
@@ -638,26 +636,6 @@ impl OverlayImpl {
     }
 }
 
-fn create_text_format() -> Result<IDWriteTextFormat> {
-    unsafe {
-        let factory: IDWriteFactory2 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
-
-        let font_height = 100.0;
-        let format = factory.CreateTextFormat(
-            w!("Candara"),
-            None,
-            DWRITE_FONT_WEIGHT_NORMAL,
-            DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
-            font_height,
-            w!("en"),
-        )?;
-
-        format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
-        format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
-        Ok(format)
-    }
-}
 
 fn create_device_3d() -> Result<ID3D11Device> {
     let mut device = None;
