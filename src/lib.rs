@@ -35,6 +35,8 @@ pub struct Overlay {
 }
 
 impl Overlay {
+
+    /// Create a new overlay
     pub fn new() -> std::result::Result<Overlay, Error> {
         let window = Arc::new(Mutex::new(OverlayImpl::new()?));
         {
@@ -45,6 +47,11 @@ impl Overlay {
         Ok(Self { overlay: window })
     }
 
+
+    /// Prepare a font for usage.
+    ///
+    /// Draw arbitrary geometry on the screen. You may need to offset by half a pixel to ensure you get pixel-perfect
+    /// crisp lines.
     pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -56,11 +63,20 @@ impl Overlay {
         }
     }
 
-    pub fn prepare_font(&self, properties: &FontProperties) -> std::result::Result<PreparedFont, Error> {
+    /// Prepare a font for usage.
+    ///
+    /// Initialises the font according to the properties, this handle is passed to [`draw_text`].
+    pub fn prepare_font(&self, properties: &TextProperties) -> std::result::Result<PreparedFont, Error> {
         let mut wlock = self.overlay.lock();
         Ok(wlock.prepare_font(properties)?)
     }
 
+    /// Draw text on the screen.
+    ///
+    /// * `text` The text to write
+    /// * `layout` The layout rectangle to stay in.
+    /// * `color` The color with which to draw.
+    /// * `font` The prepared font as returned by [`prepare_font`].
     pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color, font: &PreparedFont) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -73,6 +89,7 @@ impl Overlay {
     }
 
 
+    /// Load a texture from disk for later use.
     pub fn load_texture<P: AsRef<std::path::Path>>(&self, path: P) -> std::result::Result<ImageTexture, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -103,24 +120,34 @@ impl Overlay {
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum TextAlignment{
+    /// Align to the minimum possible value. (Left or Top)
     Min,
     #[default]
+    /// Align to the center of the axis.
     Center,
+    /// Align to the maximum possible value. (Right or Bottom)
     Max,
+    /// Only applicable to horizontal; justified rendering.
     Justified
 }
 
+/// Properties for the font and text.
 #[derive(Clone, Debug)]
-pub struct FontProperties{
+pub struct TextProperties{
+    /// The font family name, on windows defaults to 'Arial'.
     font: String,
+    /// The size of the font in device independent pixels.
     size: f32,
+    /// Horizontal alignment specification.
     horizontal_align: TextAlignment,
+    /// Vertical alignment specification.
     vertical_align: TextAlignment,
 }
-impl Default for FontProperties {
+impl Default for TextProperties {
     fn default() -> Self {
         Self {
-            font: "Candara".to_owned(),
+            // font: "Candara".to_owned(),
+            font: "Arial".to_owned(),
             size: 16.0,
             horizontal_align: TextAlignment::default(),
             vertical_align: TextAlignment::default(),
@@ -128,11 +155,13 @@ impl Default for FontProperties {
     }
 }
 
+/// Color representation with alpha.
 #[derive(Copy, Clone, Debug)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+    /// Alpha channel, 255 is opaque, 0 is transparent.
     pub a: u8,
 }
 impl Color {
@@ -298,7 +327,7 @@ pub fn main() -> std::result::Result<(), Error> {
             .draw_geometry(&geometry, &stroke)
             .expect("create image failed");
 
-        let font = twindow.prepare_font(&FontProperties{
+        let font = twindow.prepare_font(&TextProperties{
             size: 32.0,
             horizontal_align: TextAlignment::Min,
             vertical_align: TextAlignment::Min,

@@ -23,7 +23,7 @@ use windows::{
     },
 };
 
-use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement, FontProperties, TextAlignment};
+use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement, TextProperties, TextAlignment};
 
 use std::sync::Arc;
 
@@ -335,7 +335,7 @@ impl OverlayImpl {
         }
     }
 
-    pub fn prepare_font(&mut self, properties: &FontProperties) -> Result<PreparedFont> {
+    pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont> {
         unsafe {
             let factory: IDWriteFactory2 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
 
