@@ -339,20 +339,24 @@ impl DrawGeometry {
     pub fn new() -> Self {
         Self { elements: vec![] }
     }
+
     fn appended(self, e: GeometryElement) -> Self {
         let mut elements = self.elements;
         elements.push(e);
         Self { elements }
     }
+
     pub fn hollow(self, x: f32, y: f32) -> Self {
         self.appended(GeometryElement::Start {
             start: Point { x, y },
             filled: false,
         })
     }
+
     pub fn closed(self) -> Self {
         self.appended(GeometryElement::End { closed: true })
     }
+
     pub fn line(self, x: f32, y: f32) -> Self {
         self.appended(GeometryElement::Line(Point { x, y }))
     }
@@ -363,6 +367,25 @@ impl DrawGeometry {
             .line(rect.max.x, rect.max.y)
             .line(rect.max.x, rect.min.y)
             .closed()
+    }
+
+    pub fn circle(self, position: &Point, radius: f32) -> Self {
+        let start_of_circle = Point { x: position.x + radius, y: position.y };
+        let half_circle = Point { x: position.x - radius, y: position.y };
+        self.appended(GeometryElement::Start {
+            start: start_of_circle,
+            filled: false,
+        }).appended(GeometryElement::Arc{
+            end_point: half_circle,
+            radius,
+            angle: 0.0,
+            direction: CircleDirection::CounterClockWise
+        }).appended(GeometryElement::Arc{
+            end_point: start_of_circle,
+            radius,
+            angle: 0.0,
+            direction: CircleDirection::CounterClockWise
+        }).closed()
     }
 }
 
@@ -450,6 +473,21 @@ pub fn main() -> std::result::Result<(), Error> {
             .expect("create image failed");
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
+
+        
+        let geometry = DrawGeometry::new().circle(&Point::new(510.0, 500.0), 10.0);
+        let color = Color {
+            r: 0,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
+        let stroke = Stroke { color, width: 1.0 };
+
+        let _v = twindow
+            .draw_geometry(&geometry, &stroke, &Default::default())
+            .expect("create image failed");
+
 
         let _z = {
             let geometry = DrawGeometry::new()

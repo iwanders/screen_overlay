@@ -24,7 +24,7 @@ use windows::{
 };
 
 use crate::{
-    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle
+    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle, CircleDirection
 };
 
 use std::sync::Arc;
@@ -108,6 +108,15 @@ impl From<DashStyle> for D2D1_DASH_STYLE   {
             DashStyle::Dot => D2D1_DASH_STYLE_DOT,
             DashStyle::DashDot => D2D1_DASH_STYLE_DASH_DOT,
             DashStyle::DashDotDot => D2D1_DASH_STYLE_DASH_DOT_DOT,
+        }
+    }
+}
+
+impl From<CircleDirection> for D2D1_SWEEP_DIRECTION {
+    fn from(c: CircleDirection) -> Self {
+        match c {
+            CircleDirection::CounterClockWise => D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE ,
+            CircleDirection::ClockWise => D2D1_SWEEP_DIRECTION_CLOCKWISE ,
         }
     }
 }
@@ -253,7 +262,8 @@ impl OverlayImpl {
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
-            let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
+            // let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
+            let sink: ID2D1GeometrySink = path_geom.Open()?.cast()?;
             let mut is_started: bool  = false;
             for el in geometry.elements.iter() {
                 match el {
@@ -285,7 +295,22 @@ impl OverlayImpl {
                     GeometryElement::Line(point) => {
                         sink.AddLines(&[(*point).into()]);
                     }
-                    z => todo!("Missing implementation for {z:?}"),
+                    GeometryElement::Arc{end_point, radius, angle, direction} => {
+                        let segment = D2D1_ARC_SEGMENT {
+                            point: (*end_point).into(),
+                            size: D2D_SIZE_F {
+                                width: *radius,
+                                height: *radius,
+                            },
+                            rotationAngle: *angle,
+                            sweepDirection: (*direction).into(),
+                            arcSize: if *angle >= 180.0 {D2D1_ARC_SIZE_LARGE} else {D2D1_ARC_SIZE_SMALL},
+                        };
+                        sink.AddArc(
+                            &segment
+                        );
+                    }
+                    // z => todo!("Missing implementation for {z:?}"),
                 }
             }
             sink.Close()?;
