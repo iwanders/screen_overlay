@@ -139,7 +139,7 @@ pub fn run_msg_loop() -> Result<()> {
     unsafe {
         let mut message = MSG::default();
         while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
-            println!("message: {message:?}");
+            // println!("message: {message:?}");
             DispatchMessageA(&message);
         }
         Ok(())
@@ -343,6 +343,7 @@ impl OverlayImpl {
                 dashOffset: line_style.dash_offset,
                 ..Default::default()
             };
+            // println!("stroke_props: {stroke_props:?}");
             let stroke_style = dc.GetFactory()?.CreateStrokeStyle(&stroke_props, None)?;
 
             dc.DrawGeometry(&path_geom, &brush, strokewidth, &stroke_style);
@@ -605,7 +606,7 @@ impl OverlayImpl {
     fn create_handler(&mut self) -> Result<()> {
         unsafe {
             let desired_size = self.desired_window_size()?;
-            println!("Setting size to: {:?}", desired_size);
+            // println!("Setting size to: {:?}", desired_size);
             SetWindowPos(
                 self.handle,
                 None,

@@ -12,6 +12,7 @@ pub fn main() -> std::result::Result<(), Error> {
 
     let twindow = window.clone();
     let _msg_loop_thread = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
         let color = Color {
             r: 255,
             g: 0,
