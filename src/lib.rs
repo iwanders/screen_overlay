@@ -45,12 +45,6 @@ impl Overlay {
         Ok(Self { overlay: window })
     }
 
-    pub fn create_image(&self) -> std::result::Result<(), Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            Ok(wlock.create_image()?)
-        }
-    }
 
     pub fn draw_line(&self) -> std::result::Result<VisualToken, Error> {
         {
@@ -230,8 +224,7 @@ pub fn main() -> std::result::Result<(), Error> {
         let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
 
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        twindow.create_image().expect("create image failed");
+
         std::thread::sleep(std::time::Duration::from_millis(1000));
         if true {
             let v = twindow.draw_line().expect("create image failed");

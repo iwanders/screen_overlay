@@ -84,7 +84,6 @@ struct DrawElement {
 pub struct OverlayImpl {
     handle: HWND,
     format: IDWriteTextFormat,
-    image: IWICFormatConverter,
     manager: IUIAnimationManager2,
     library: IUIAnimationTransitionLibrary2,
     device: Option<ID3D11Device>,
@@ -118,7 +117,6 @@ impl OverlayImpl {
             Ok(Self {
                 handle: Default::default(),
                 format: create_text_format()?,
-                image: create_image()?,
                 manager,
                 library,
                 device: None,
@@ -197,33 +195,6 @@ impl OverlayImpl {
 
             desktop.Commit()?;
             self.desktop = Some(desktop);
-
-            Ok(())
-        }
-    }
-
-    pub fn create_image(&mut self) -> Result<()> {
-        return Ok(());
-        unsafe {
-            // let device_2d = create_device_2d(self.device.as_ref().unwrap())?;
-            // let dc = device_2d.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-            // dc.SetUnitMode(D2D1_UNIT_MODE_PIXELS); // set the device mode to pixels.
-            // let bitmap = dc.CreateBitmapFromWicBitmap(&self.image, None)?;
-            let width = CARD_WIDTH;
-            let height = CARD_HEIGHT;
-
-            let visual = create_visual(self.desktop.as_ref().unwrap())?;
-            visual.SetOffsetX2(100.0)?;
-            visual.SetOffsetY2(100.0)?;
-            self.root_visual
-                .as_ref()
-                .unwrap()
-                .AddVisual(&visual, false, None)?;
-
-            // let surface = &self.elements[0].surface;
-            // visual.SetContent(surface)?;
-
-            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
             Ok(())
         }
@@ -647,41 +618,6 @@ fn create_text_format() -> Result<IDWriteTextFormat> {
         format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
         format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
         Ok(format)
-    }
-}
-
-fn create_image() -> Result<IWICFormatConverter> {
-    unsafe {
-        let factory: IWICImagingFactory2 =
-            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
-
-        // Just a little hack to make it simpler to run the sample from the root of the workspace.
-        let path = if PathFileExistsW(w!("image.jpg")).is_ok() {
-            w!("image.jpg")
-        } else {
-            w!("crates/samples/windows/dcomp/image.jpg")
-        };
-
-        let decoder = factory.CreateDecoderFromFilename(
-            path,
-            None,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-        )?;
-
-        let source = decoder.GetFrame(0)?;
-        let image = factory.CreateFormatConverter()?;
-
-        image.Initialize(
-            &source,
-            &GUID_WICPixelFormat32bppBGR,
-            WICBitmapDitherTypeNone,
-            None,
-            0.0,
-            WICBitmapPaletteTypeMedianCut,
-        )?;
-
-        Ok(image)
     }
 }
 
