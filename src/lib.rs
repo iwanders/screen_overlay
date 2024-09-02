@@ -45,7 +45,7 @@ impl Overlay {
         Ok(Self { overlay: window })
     }
 
-
+    /*
     pub fn draw_line(&self) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -55,7 +55,7 @@ impl Overlay {
                 overlay: self.overlay.clone(),
             })
         }
-    }
+    }*/
 
     pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
         {
@@ -226,10 +226,7 @@ pub fn main() -> std::result::Result<(), Error> {
 
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        if true {
-            let v = twindow.draw_line().expect("create image failed");
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
+
         let z =   {
             let geometry = DrawGeometry::hollow(200.0, 10.0)
                 .line(100.0, 100.0)

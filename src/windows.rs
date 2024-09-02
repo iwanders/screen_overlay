@@ -136,7 +136,7 @@ impl OverlayImpl {
                 // WS_EX_NOREDIRECTIONBITMAP,
                 WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
                 window_class,
-                s!("Sample Window"),
+                s!("TransparentOverlay"),
                 // WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
                 WS_POPUP, // use popup, that disables the titlebar and border.
                 CW_USEDEFAULT,
@@ -187,7 +187,21 @@ impl OverlayImpl {
         }
     }
 
-    pub fn draw_line(&mut self) -> Result<IDVisual> {
+    fn create_fullscreen_surface_visual(&mut self) -> Result<(IDCompositionSurface, IDCompositionVisual2)> {
+        unsafe {
+            let window_rect = self.desired_window_size()?;
+            let visual = create_visual(self.desktop.as_ref().unwrap())?;
+            visual.SetOffsetX2(window_rect.left as f32)?;
+            visual.SetOffsetY2(window_rect.top as f32)?;
+            let width = window_rect.right - window_rect.left;
+            let height =window_rect.bottom - window_rect.top;
+            let surface = create_surface(self.desktop.as_ref().unwrap(), width as f32, height as f32)?;
+            visual.SetContent(&surface)?;
+            Ok((surface, visual))
+        }
+    }
+
+    fn draw_line(&mut self) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
@@ -251,29 +265,17 @@ impl OverlayImpl {
     pub fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
-            let visual = create_visual(self.desktop.as_ref().unwrap())?;
-            visual.SetOffsetX2(0.0)?;
-            visual.SetOffsetY2(0.0)?;
+
+            let (surface, visual) = self.create_fullscreen_surface_visual()?;
             self.root_visual
                 .as_ref()
                 .unwrap()
                 .AddVisual(&visual, false, None)?;
-            let width = 1000.0;
-            let height = 1000.0;
-            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
-            visual.SetContent(&surface)?;
 
             let mut offset = Default::default();
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
 
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
-
-            dc.Clear(Some(&D2D1_COLOR_F {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 0.0,
-            }));
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
             let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
@@ -327,8 +329,8 @@ impl OverlayImpl {
     pub fn draw_text(&mut self, text: &str, layout: &Rect, color: &Color) -> Result<IDVisual> {
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
-            visual.SetOffsetX2(0.0)?;
-            visual.SetOffsetY2(0.0)?;
+            visual.SetOffsetX2(layout.min.x)?;
+            visual.SetOffsetY2(layout.min.y)?;
             self.root_visual
                 .as_ref()
                 .unwrap()
@@ -341,7 +343,7 @@ impl OverlayImpl {
             let mut offset = Default::default();
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
 
-            dc.SetTransform(&Matrix3x2::translation(layout.min.x, layout.min.y));
+            dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
             dc.Clear(Some(&D2D1_COLOR_F {
                 r: 1.0,
@@ -440,7 +442,7 @@ impl OverlayImpl {
                 // a: 0.0,
             // }));
 
-            println!("Convert image to bitmap");
+
             let properties = D2D1_BITMAP_PROPERTIES1  {
                 pixelFormat: D2D1_PIXEL_FORMAT  {
                     format: DXGI_FORMAT_B8G8R8A8_UNORM,
@@ -451,7 +453,6 @@ impl OverlayImpl {
             };
             let bitmap = dc.CreateBitmapFromWicBitmap(&*(*texture).image, Some(&properties))?;
 
-            println!("below  image to bitmap");
             dc.SetTransform(&Matrix3x2::translation(
                 dc_offset.x as f32,
                 dc_offset.y as f32,
