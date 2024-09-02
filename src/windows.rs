@@ -81,8 +81,6 @@ struct DrawElement {
 pub struct OverlayImpl {
     handle: HWND,
     format: IDWriteTextFormat,
-    manager: IUIAnimationManager2,
-    library: IUIAnimationTransitionLibrary2,
     device: Option<ID3D11Device>,
     desktop: Option<IDCompositionDesktopDevice>,
     target: Option<IDCompositionTarget>,
@@ -105,17 +103,9 @@ pub fn run_msg_loop() -> Result<()> {
 impl OverlayImpl {
     pub fn new() -> Result<Self> {
         unsafe {
-            let manager: IUIAnimationManager2 =
-                CoCreateInstance(&UIAnimationManager2, None, CLSCTX_INPROC_SERVER)?;
-
-            let library =
-                CoCreateInstance(&UIAnimationTransitionLibrary2, None, CLSCTX_INPROC_SERVER)?;
-
             Ok(Self {
                 handle: Default::default(),
                 format: create_text_format()?,
-                manager,
-                library,
                 device: None,
                 desktop: None,
                 target: None,

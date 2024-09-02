@@ -248,7 +248,7 @@ pub fn main() -> std::result::Result<(), Error> {
             std::thread::sleep(std::time::Duration::from_millis(500));
             v
         };
-        if false {
+        if true {
             let color = Color {
                 r: 255,
                 g: 0,
