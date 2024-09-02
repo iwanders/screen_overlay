@@ -59,10 +59,11 @@ impl Overlay {
         &self,
         geometry: &DrawGeometry,
         stroke: &Stroke,
+        line_style: &LineStyle,
     ) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_geometry(geometry, stroke)?;
+            let visual = wlock.draw_geometry(geometry, stroke, line_style)?;
             Ok(VisualToken {
                 visual,
                 overlay: self.overlay.clone(),
@@ -213,6 +214,50 @@ pub struct Stroke {
     pub color: Color,
     pub width: f32,
 }
+
+
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum CapStyle {
+    #[default]
+    Flat,
+    Square,
+    Round,
+    Triangle,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum LineJoin {
+    #[default]
+    Miter,
+    Bevel,
+    Round,
+    MiterOrBevel,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum DashStyle {
+    #[default]
+    Solid,
+    Dash,
+    Dot,
+    DashDot,
+    DashDotDot,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct LineStyle {
+    pub start_cap: CapStyle,
+    pub end_cap: CapStyle,
+    pub dash_cap: CapStyle,
+
+    pub line_join: LineJoin,
+    pub miter_limit: f32,
+
+    pub dash_style: DashStyle,
+    pub dash_offset: f32,
+}
+
 
 #[derive(Copy, Clone, Debug)]
 pub struct Point {
@@ -370,9 +415,14 @@ pub fn main() -> std::result::Result<(), Error> {
             a: 255,
         };
         let stroke = Stroke { color, width: 1.0 };
+        let text_box_style = LineStyle{
+            dash_style: DashStyle::Dash,
+            // line_join: LineJoin::Round,
+            ..Default::default()
+        };
 
         let _v = twindow
-            .draw_geometry(&geometry, &stroke)
+            .draw_geometry(&geometry, &stroke, &text_box_style)
             .expect("create image failed");
 
         let font = twindow
@@ -415,7 +465,7 @@ pub fn main() -> std::result::Result<(), Error> {
             let stroke = Stroke { color, width: 30.0 };
 
             let v = twindow
-                .draw_geometry(&geometry, &stroke)
+                .draw_geometry(&geometry, &stroke, &Default::default())
                 .expect("create image failed");
             std::thread::sleep(std::time::Duration::from_millis(500));
             v

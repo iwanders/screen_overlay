@@ -24,7 +24,7 @@ use windows::{
 };
 
 use crate::{
-    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties,
+    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle
 };
 
 use std::sync::Arc;
@@ -74,6 +74,40 @@ impl From<Rect> for D2D_RECT_F {
             top: r.min.y,
             right: r.max.x,
             bottom: r.max.y,
+        }
+    }
+}
+
+impl From<CapStyle> for D2D1_CAP_STYLE  {
+    fn from(c: CapStyle) -> Self {
+        match c {
+            CapStyle::Flat => D2D1_CAP_STYLE_FLAT,
+            CapStyle::Square => D2D1_CAP_STYLE_SQUARE,
+            CapStyle::Round => D2D1_CAP_STYLE_ROUND,
+            CapStyle::Triangle => D2D1_CAP_STYLE_TRIANGLE,
+        }
+    }
+}
+
+impl From<LineJoin> for D2D1_LINE_JOIN   {
+    fn from(c: LineJoin) -> Self {
+        match c {
+            LineJoin::Miter => D2D1_LINE_JOIN_MITER,
+            LineJoin::Bevel => D2D1_LINE_JOIN_BEVEL,
+            LineJoin::Round => D2D1_LINE_JOIN_ROUND,
+            LineJoin::MiterOrBevel => D2D1_LINE_JOIN_MITER_OR_BEVEL,
+        }
+    }
+}
+
+impl From<DashStyle> for D2D1_DASH_STYLE   {
+    fn from(c: DashStyle) -> Self {
+        match c {
+            DashStyle::Solid => D2D1_DASH_STYLE_SOLID,
+            DashStyle::Dash => D2D1_DASH_STYLE_DASH,
+            DashStyle::Dot => D2D1_DASH_STYLE_DOT,
+            DashStyle::DashDot => D2D1_DASH_STYLE_DASH_DOT,
+            DashStyle::DashDotDot => D2D1_DASH_STYLE_DASH_DOT_DOT,
         }
     }
 }
@@ -204,7 +238,7 @@ impl OverlayImpl {
         }
     }
 
-    pub fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke) -> Result<IDVisual> {
+    pub fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke, line_style: &LineStyle) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
             let (surface, visual) = self.create_fullscreen_surface_visual()?;
@@ -262,9 +296,15 @@ impl OverlayImpl {
             let strokewidth = stroke.width;
 
             let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
+                startCap: line_style.start_cap.into(),
+                endCap: line_style.end_cap.into(),
+                dashCap: line_style.dash_cap.into(),
+                lineJoin: line_style.line_join.into(),
+                miterLimit: line_style.miter_limit,
+                dashStyle: line_style.dash_style.into(),
+                dashOffset: line_style.dash_offset,
                 ..Default::default()
             };
-            // let stroke_style = self.factory.as_ref().unwrap().CreateStrokeStyle(&stroke_props, None)?;
             let stroke_style = dc.GetFactory()?.CreateStrokeStyle(&stroke_props, None)?;
 
             dc.DrawGeometry(&path_geom, &brush, strokewidth, &stroke_style);
