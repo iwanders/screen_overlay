@@ -1,5 +1,5 @@
 [package]
-name = "windows_overlay"
+name = "screen_overlay"
 version = "0.1.0"
 edition = "2021"
 authors = ["Ivor Wanders <ivor@iwanders.net>"]
