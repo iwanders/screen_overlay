@@ -212,7 +212,7 @@ impl OverlayImpl {
                 windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
                 let _ = ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
             }
-            // self.create_handler()?;
+            self.create_handler()?;
 
             debug_assert!(!handle.is_invalid());
             debug_assert!(handle == self.handle);

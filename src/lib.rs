@@ -387,6 +387,12 @@ impl DrawGeometry {
         self.appended(GeometryElement::Line(Point { x, y }))
     }
 
+    pub fn line_segment(self, p0: &Point, p1: &Point) -> Self {
+        self.hollow(p0.x, p0.y)
+            .line(p1.x, p1.y)
+            .closed()
+    }
+
     pub fn rectangle(self, rect: &Rect) -> Self {
         self.hollow(rect.min.x, rect.min.y)
             .line(rect.min.x, rect.max.y)
