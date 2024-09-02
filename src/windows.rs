@@ -23,7 +23,7 @@ use windows::{
     },
 };
 
-use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement};
+use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement, FontProperties, TextAlignment};
 
 use std::sync::Arc;
 
@@ -38,6 +38,17 @@ impl std::fmt::Debug for ImageTexture {
         write!(f, "ImageTexture {:?}", &self)
     }
 }
+
+#[derive(Clone)]
+pub struct PreparedFont {
+    text_format: Arc<IDWriteTextFormat>
+}
+impl std::fmt::Debug for PreparedFont {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "PreparedFont {:?}", &self)
+    }
+}
+
 
 impl From<Color> for D2D1_COLOR_F {
     fn from(c: Color) -> Self {
@@ -326,7 +337,50 @@ impl OverlayImpl {
         }
     }
 
-    pub fn draw_text(&mut self, text: &str, layout: &Rect, color: &Color) -> Result<IDVisual> {
+    pub fn prepare_font(&mut self, properties: &FontProperties) -> Result<PreparedFont> {
+        unsafe {
+            let factory: IDWriteFactory2 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
+
+            use std::os::windows::ffi::OsStrExt;
+            let font_name: Vec<u16> = std::ffi::OsStr::new(properties.font.as_str()).encode_wide().chain([0u16].iter().copied()).collect();
+            
+            let font_name_string = PCWSTR::from_raw(font_name.as_ptr());
+            let font_height = properties.size;
+
+            let format = factory.CreateTextFormat(
+                font_name_string,
+                None,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                font_height,
+                w!("en"),
+            )?;
+
+            let text_align = match properties.horizontal_align {
+                TextAlignment::Min => DWRITE_TEXT_ALIGNMENT_LEADING,
+                TextAlignment::Center => DWRITE_TEXT_ALIGNMENT_CENTER,
+                TextAlignment::Max => DWRITE_TEXT_ALIGNMENT_TRAILING,
+                TextAlignment::Justified => DWRITE_TEXT_ALIGNMENT_JUSTIFIED,
+            };
+
+            let paragraph_align = match properties.vertical_align {
+                TextAlignment::Min => DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
+                TextAlignment::Center => DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+                TextAlignment::Max => DWRITE_PARAGRAPH_ALIGNMENT_FAR,
+                TextAlignment::Justified => panic!("vertical alignment does not support justified"),
+            };
+
+            format.SetTextAlignment(text_align)?;
+            format.SetParagraphAlignment(paragraph_align)?;
+            
+            Ok(PreparedFont{
+                text_format: Arc::new(format)
+            })
+        }
+    }
+
+    pub fn draw_text(&mut self, text: &str, layout: &Rect, color: &Color, font: &PreparedFont) -> Result<IDVisual> {
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(layout.min.x)?;
@@ -352,7 +406,7 @@ impl OverlayImpl {
                 a: 0.0,
             }));
 
-            let format = create_text_format()?;
+            // let format = create_text_format()?;
 
             let brush: ID2D1Brush = dc
                 .CreateSolidColorBrush(&(*color).into(), None)?
@@ -361,7 +415,7 @@ impl OverlayImpl {
             let windows_string: Vec<u16> = std::ffi::OsStr::new(text).encode_wide().chain([0u16].iter().copied()).collect();
             dc.DrawText(
                 &windows_string,
-                &format,
+                &*font.text_format,
                 &D2D_RECT_F {
                     left: 0.0,
                     top: 0.0,
@@ -390,7 +444,7 @@ impl OverlayImpl {
             let path : std::path::PathBuf = std::path::PathBuf::from(path.as_ref());
             use std::os::windows::ffi::OsStrExt;
             let windows_string: Vec<u16>  = std::ffi::OsString::from(&path).encode_wide().chain([0u16].iter().copied()).collect();
-            println!("windows string: {windows_string:?}");
+            // println!("windows string: {windows_string:?}");
             let z = PCWSTR::from_raw(windows_string.as_ptr());
 
             // https://learn.microsoft.com/en-us/windows/win32/wic/-wic-bitmapsources

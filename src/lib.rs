@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 
 mod windows;
-use windows::{OverlayImpl, IDVisual, ImageTexture};
+use windows::{OverlayImpl, IDVisual, ImageTexture, PreparedFont};
 
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -56,16 +56,23 @@ impl Overlay {
         }
     }
 
-    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color) -> std::result::Result<VisualToken, Error> {
+    pub fn prepare_font(&self, properties: &FontProperties) -> std::result::Result<PreparedFont, Error> {
+        let mut wlock = self.overlay.lock();
+        Ok(wlock.prepare_font(properties)?)
+    }
+
+    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color, font: &PreparedFont) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_text(text, layout, color)?;
+            let visual = wlock.draw_text(text, layout, color, font)?;
             Ok(VisualToken {
                 visual,
                 overlay: self.overlay.clone(),
             })
         }
     }
+
+
     pub fn load_texture<P: AsRef<std::path::Path>>(&self, path: P) -> std::result::Result<ImageTexture, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -93,6 +100,33 @@ impl Overlay {
     }
 }
 
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum TextAlignment{
+    Min,
+    #[default]
+    Center,
+    Max,
+    Justified
+}
+
+#[derive(Clone, Debug)]
+pub struct FontProperties{
+    font: String,
+    size: f32,
+    horizontal_align: TextAlignment,
+    vertical_align: TextAlignment,
+}
+impl Default for FontProperties {
+    fn default() -> Self {
+        Self {
+            font: "Candara".to_owned(),
+            size: 16.0,
+            horizontal_align: TextAlignment::default(),
+            vertical_align: TextAlignment::default(),
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct Color {
@@ -223,8 +257,8 @@ impl DrawGeometry {
         self.appended(GeometryElement::Line(Point { x, y }))
     }
 
-    pub fn rectangle(self, min: &Point, max: &Point) -> Self {
-        self.hollow(min.x, min.y).line(min.x, max.y).line(max.x, max.y).line(max.x, min.y).closed()
+    pub fn rectangle(self, rect: &Rect) -> Self {
+        self.hollow(rect.min.x, rect.min.y).line(rect.min.x, rect.max.y).line(rect.max.x, rect.max.y).line(rect.max.x, rect.min.y).closed()
     }
 }
 
@@ -251,6 +285,34 @@ pub fn main() -> std::result::Result<(), Error> {
         let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0), &Color::TRANSPARENT, alpha).expect("texture draw failed");
 
 
+        let geometry = DrawGeometry::new().rectangle(&Rect::from(200.0, 200.0).sized(200.0, 300.0));
+        let color = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
+        let stroke = Stroke { color, width: 1.0 };
+
+        let v = twindow
+            .draw_geometry(&geometry, &stroke)
+            .expect("create image failed");
+
+        let font = twindow.prepare_font(&FontProperties{
+            size: 32.0,
+            horizontal_align: TextAlignment::Min,
+            vertical_align: TextAlignment::Min,
+            ..Default::default()
+        }).expect("preparing the font failed");
+
+        let color = Color {
+            r: 255,
+            g: 0,
+            b: 255,
+            a: 255,
+        };
+        let v = twindow.draw_text("hello there we are rendering text", &Rect::from(200.0, 200.0).sized(200.0, 300.0), &color, &font).expect("create image failed");
+
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
@@ -272,16 +334,8 @@ pub fn main() -> std::result::Result<(), Error> {
             std::thread::sleep(std::time::Duration::from_millis(500));
             v
         };
-        if true {
-            let color = Color {
-                r: 255,
-                g: 0,
-                b: 255,
-                a: 255,
-            };
-            let v = twindow.draw_text("hello", &Rect::from(200.0, 200.0).sized(600.0, 300.0), &color).expect("create image failed");
-            std::thread::sleep(std::time::Duration::from_millis(1000));
-        }
+
+
         println!("blocking now");
         std::thread::sleep(std::time::Duration::from_millis(1000000));
     });
