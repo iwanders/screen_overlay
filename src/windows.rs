@@ -24,7 +24,7 @@ use windows::{
 };
 
 use crate::{
-    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle, CircleDirection
+    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle, CircleDirection, OverlayConfig
 };
 
 use std::sync::Arc;
@@ -157,7 +157,7 @@ impl OverlayImpl {
         })
     }
 
-    pub fn create_window(&mut self) -> Result<()> {
+    pub fn create_window(&mut self, config: &OverlayConfig) -> Result<()> {
         unsafe {
             let instance = GetModuleHandleA(None)?;
             let window_class = s!("window");
@@ -175,11 +175,24 @@ impl OverlayImpl {
             let atom = RegisterClassA(&wc);
             debug_assert!(atom != 0);
 
+            let mut ex_props = WS_EX_COMPOSITED | WS_EX_LAYERED  | WS_EX_TRANSPARENT;
+            if !config.task_bar {
+                ex_props |= WS_EX_NOACTIVATE;// <- hides from taskbar
+            }
+            if config.on_top {
+                ex_props |= WS_EX_TOPMOST;
+            }
+
+            let window_name: Vec<u8> = std::ffi::OsStr::new(config.name.as_str()).as_encoded_bytes().iter().copied()
+                .chain([0u8].iter().copied())
+                .collect();
+
+            let window_name = PCSTR::from_raw(window_name.as_ptr());
+
             let handle = CreateWindowExA(
-                // WS_EX_NOREDIRECTIONBITMAP,
-                WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST, //  |WS_EX_NOACTIVATE  <- hides taskbar
+                ex_props, // WS_EX_NOREDIRECTIONBITMAP, we don't need this.
                 window_class,
-                s!("TransparentOverlay"),
+                window_name,
                 // WS_OVERLAPPED, // | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
                 WS_POPUP, // use popup, that disables the titlebar and border.
                 CW_USEDEFAULT,

@@ -39,13 +39,38 @@ pub struct Overlay {
     overlay: Arc<Mutex<OverlayImpl>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct OverlayConfig {
+    /// If true, the application shows in the task bar.
+    task_bar: bool,
+
+    /// If true, the overlay is on top of all other windows, regardless if the application is selected
+    on_top: bool,
+
+    /// The name to give the application in the task bar.
+    name: String,
+}
+impl Default for OverlayConfig {
+    fn default() -> Self {
+        Self {
+            task_bar: true,
+            on_top: true,
+            name: "Overlay".to_owned(),
+        }
+    }
+}
+
 impl Overlay {
     /// Create a new overlay
     pub fn new() -> std::result::Result<Overlay, Error> {
+        Self::new_with_config(&Default::default())
+    }
+
+    pub fn new_with_config(config: &OverlayConfig) -> std::result::Result<Overlay, Error>{
         let window = Arc::new(Mutex::new(OverlayImpl::new()?));
         {
             let mut wlock = window.lock();
-            wlock.create_window()?;
+            wlock.create_window(config)?;
             wlock.create_device_resources()?;
         }
         Ok(Self { overlay: window })
@@ -214,8 +239,6 @@ pub struct Stroke {
     pub color: Color,
     pub width: f32,
 }
-
-
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum CapStyle {
@@ -391,7 +414,10 @@ impl DrawGeometry {
 
 pub fn main() -> std::result::Result<(), Error> {
     windows::setup()?;
-    let window = Overlay::new()?;
+    let window = Overlay::new_with_config(&OverlayConfig{
+        name: "Awesome Overlay".to_owned(),
+        ..Default::default()
+    })?;
 
     let twindow = window.clone();
     let _msg_loop_thread = std::thread::spawn(move || {
