@@ -45,18 +45,6 @@ impl Overlay {
         Ok(Self { overlay: window })
     }
 
-    /*
-    pub fn draw_line(&self) -> std::result::Result<VisualToken, Error> {
-        {
-            let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_line()?;
-            Ok(VisualToken {
-                visual,
-                overlay: self.overlay.clone(),
-            })
-        }
-    }*/
-
     pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
@@ -84,10 +72,19 @@ impl Overlay {
             Ok(wlock.load_texture(path)?)
         }
     }
-    pub fn draw_texture(&self, position: &Point, texture: &ImageTexture, texture_region: &Rect) -> std::result::Result<VisualToken, Error> {
+
+    /// Draw a texture's region at the specified position.
+    ///
+    /// * `alpha` 0.0 is transparent, 1.0 is opaque.
+    /// * `position` Top Left position at whihc the region will be drawn.
+    /// * `texture` The texture from which to draw the texture region.
+    /// * `texture_region` The area of the texture to be drawn.
+    /// * `color` The background color drawn before the texture.
+    /// * `alpha` The alpha at which the texture is drawn over the background.
+    pub fn draw_texture(&self, position: &Point, texture: &ImageTexture, texture_region: &Rect, color: &Color, alpha: f32) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
-            let visual = wlock.draw_texture(position, texture, texture_region)?;
+            let visual = wlock.draw_texture(position, texture, texture_region, color, alpha)?;
             Ok(VisualToken {
                 visual,
                 overlay: self.overlay.clone(),
@@ -98,21 +95,35 @@ impl Overlay {
 
 
 #[derive(Copy, Clone, Debug)]
-struct Color {
+pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
     pub a: u8,
 }
+impl Color {
+    pub const TRANSPARENT: Color = Color{r: 0, g: 0, b: 0, a: 0};
+    pub fn transparent(&self) -> Self {
+        Color {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a: 0,
+        }
+    }
+    pub fn a_f32(&self) -> f32 {
+        self.a as f32 / 255.0
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
-struct Stroke {
+pub struct Stroke {
     pub color: Color,
     pub width: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Point {
+pub struct Point {
     pub x: f32,
     pub y: f32,
 }
@@ -133,9 +144,9 @@ impl std::ops::Add<Point> for Point {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Rect{
-    min: Point,
-    max: Point,
+pub struct Rect{
+    pub min: Point,
+    pub max: Point,
 }
 impl Rect {
     pub fn from(x: f32, y: f32) -> Self {
@@ -188,24 +199,32 @@ struct DrawGeometry {
     pub elements: Vec<GeometryElement>,
 }
 impl DrawGeometry {
+    pub fn new() -> Self {
+        Self {
+            elements: vec![]
+        }
+    }
     fn appended(self, e: GeometryElement) -> Self {
         let mut elements = self.elements;
         elements.push(e);
         Self { elements }
     }
-    pub fn hollow(x: f32, y: f32) -> Self {
-        Self {
-            elements: vec![GeometryElement::Start {
+    pub fn hollow(self, x: f32, y: f32) -> Self {
+       self.appended(GeometryElement::Start {
                 start: Point { x, y },
                 filled: false,
-            }],
-        }
+            })
+        
     }
     pub fn closed(self) -> Self {
         self.appended(GeometryElement::End { closed: true })
     }
     pub fn line(self, x: f32, y: f32) -> Self {
         self.appended(GeometryElement::Line(Point { x, y }))
+    }
+
+    pub fn rectangle(self, min: &Point, max: &Point) -> Self {
+        self.hollow(min.x, min.y).line(min.x, max.y).line(max.x, max.y).line(max.x, min.y).closed()
     }
 }
 
@@ -217,18 +236,26 @@ pub fn main() -> std::result::Result<(), Error> {
     let twindow = window.clone();
     let msg_loop_thread = std::thread::spawn(move || {
 
+
+        let color = Color {
+            r: 255,
+            g: 0,
+            b: 255,
+            a: 128,
+        };
+        let alpha = 0.5;
         let image2 = twindow.load_texture(std::path::PathBuf::from("PNG_transparency_demonstration_1.png")).expect("failed to load image");
-        let t2 = twindow.draw_texture(&Point::new(500.0, 500.0), &image2, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
+        let t2 = twindow.draw_texture(&Point::new(500.0, 500.0), &image2, &Rect::from(0.0, 0.0).sized(200.0, 200.0), &color, alpha).expect("texture draw failed");
 
         let image = twindow.load_texture(std::path::PathBuf::from("image.jpg")).expect("failed to load image");
-        let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0)).expect("texture draw failed");
+        let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0), &Color::TRANSPARENT, alpha).expect("texture draw failed");
 
 
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
         let z =   {
-            let geometry = DrawGeometry::hollow(200.0, 10.0)
+            let geometry = DrawGeometry::new().hollow(200.0, 10.0)
                 .line(100.0, 100.0)
                 .closed();
             let color = Color {

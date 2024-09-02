@@ -418,7 +418,7 @@ impl OverlayImpl {
             Ok(ImageTexture{image})
         }
     }
-    pub fn draw_texture(&mut self, position: &Point, texture: &ImageTexture, texture_region: &Rect) -> Result<IDVisual> {
+    pub fn draw_texture(&mut self, position: &Point, texture: &ImageTexture, texture_region: &Rect, color: &Color, alpha: f32) -> Result<IDVisual> {
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(position.x)?;
@@ -435,12 +435,7 @@ impl OverlayImpl {
             let mut dc_offset = Default::default();
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut dc_offset)?;
 
-            // dc.Clear(Some(&D2D1_COLOR_F {
-                // r: 1.0,
-                // g: 1.0,
-                // b: 1.0,
-                // a: 0.0,
-            // }));
+            dc.Clear(Some(&(*color).into()));
 
 
             let properties = D2D1_BITMAP_PROPERTIES1  {
@@ -462,7 +457,7 @@ impl OverlayImpl {
             dc.DrawBitmap(
                 &bitmap,
                 None,
-                1.0, // alpha
+                alpha, // alpha
                 D2D1_INTERPOLATION_MODE_LINEAR,
                 Some(&D2D_RECT_F {
                     left: texture_region.min.x,
