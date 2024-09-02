@@ -16,14 +16,16 @@ use windows::{
         Graphics::Imaging::*,
         System::Com::*,
         System::LibraryLoader::*,
-        UI::Animation::*,
+        // UI::Animation::*,
         // UI::HiDpi::*,
-        UI::Shell::*,
+        // UI::Shell::*,
         UI::WindowsAndMessaging::*,
     },
 };
 
-use crate::{Color, Rect, Point, DrawGeometry, Stroke, GeometryElement, TextProperties, TextAlignment};
+use crate::{
+    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties,
+};
 
 use std::sync::Arc;
 
@@ -41,14 +43,13 @@ impl std::fmt::Debug for ImageTexture {
 
 #[derive(Clone)]
 pub struct PreparedFont {
-    text_format: Arc<IDWriteTextFormat>
+    text_format: Arc<IDWriteTextFormat>,
 }
 impl std::fmt::Debug for PreparedFont {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "PreparedFont {:?}", &self)
     }
 }
-
 
 impl From<Color> for D2D1_COLOR_F {
     fn from(c: Color) -> Self {
@@ -72,22 +73,14 @@ impl From<Rect> for D2D_RECT_F {
             left: r.min.x,
             top: r.min.y,
             right: r.max.x,
-            bottom: r.max.y
+            bottom: r.max.y,
         }
     }
 }
 
-
-
-
 // The IDCompositionVisual appears to be a tree, as per;
 // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
 pub type IDVisual = IDCompositionVisual2;
-struct DrawElement {
-    position: (f32, f32),
-    visual: IDVisual,
-    surface: IDCompositionSurface,
-}
 
 pub struct OverlayImpl {
     handle: HWND,
@@ -112,15 +105,13 @@ pub fn run_msg_loop() -> Result<()> {
 
 impl OverlayImpl {
     pub fn new() -> Result<Self> {
-        unsafe {
-            Ok(Self {
-                handle: Default::default(),
-                device: None,
-                desktop: None,
-                target: None,
-                root_visual: None,
-            })
-        }
+        Ok(Self {
+            handle: Default::default(),
+            device: None,
+            desktop: None,
+            target: None,
+            root_visual: None,
+        })
     }
 
     pub fn create_window(&mut self) -> Result<()> {
@@ -163,7 +154,7 @@ impl OverlayImpl {
                 let window_rect = self.desired_window_size()?;
                 let rgn = windows::Win32::Graphics::Gdi::CreateRectRgnIndirect(&window_rect);
                 windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, rgn, false);
-                ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
+                let _ = ShowWindow(hwnd, SHOW_WINDOW_CMD(1));
             }
             // self.create_handler()?;
 
@@ -196,85 +187,26 @@ impl OverlayImpl {
         }
     }
 
-    fn create_fullscreen_surface_visual(&mut self) -> Result<(IDCompositionSurface, IDCompositionVisual2)> {
+    fn create_fullscreen_surface_visual(
+        &mut self,
+    ) -> Result<(IDCompositionSurface, IDCompositionVisual2)> {
         unsafe {
             let window_rect = self.desired_window_size()?;
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(window_rect.left as f32)?;
             visual.SetOffsetY2(window_rect.top as f32)?;
             let width = window_rect.right - window_rect.left;
-            let height =window_rect.bottom - window_rect.top;
-            let surface = create_surface(self.desktop.as_ref().unwrap(), width as f32, height as f32)?;
+            let height = window_rect.bottom - window_rect.top;
+            let surface =
+                create_surface(self.desktop.as_ref().unwrap(), width as f32, height as f32)?;
             visual.SetContent(&surface)?;
             Ok((surface, visual))
-        }
-    }
-
-    fn draw_line(&mut self) -> Result<IDVisual> {
-        // Objects used together must be created from the same factory instance.
-        unsafe {
-            let visual = create_visual(self.desktop.as_ref().unwrap())?;
-            visual.SetOffsetX2(100.0)?;
-            visual.SetOffsetY2(100.0)?;
-            self.root_visual
-                .as_ref()
-                .unwrap()
-                .AddVisual(&visual, false, None)?;
-            let width = 100.0;
-            let height = 100.0;
-            let surface = create_surface(self.desktop.as_ref().unwrap(), width, height)?;
-            visual.SetContent(&surface)?;
-
-            let mut offset = Default::default();
-            let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
-
-            dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
-
-            dc.Clear(Some(&D2D1_COLOR_F {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 0.0,
-            }));
-
-            let p0 = D2D_POINT_2F { x: 0.0, y: 0.0 };
-            let p1 = D2D_POINT_2F {
-                x: 1000.0,
-                y: 1000.0,
-            };
-            let brush: ID2D1Brush = dc
-                .CreateSolidColorBrush(
-                    &D2D1_COLOR_F {
-                        r: 1.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    },
-                    None,
-                )?
-                .cast()?;
-            let strokewidth = 5.0;
-
-            let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
-                ..Default::default()
-            };
-            // let stroke_style = self.factory.as_ref().unwrap().CreateStrokeStyle(&stroke_props, None)?;
-            let stroke_style = dc.GetFactory()?.CreateStrokeStyle(&stroke_props, None)?;
-
-            dc.DrawLine(p0, p1, &brush, strokewidth, &stroke_style);
-
-            surface.EndDraw();
-
-            self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
-
-            Ok(visual.clone())
         }
     }
 
     pub fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
-
             let (surface, visual) = self.create_fullscreen_surface_visual()?;
             self.root_visual
                 .as_ref()
@@ -327,7 +259,7 @@ impl OverlayImpl {
 
             dc.DrawGeometry(&path_geom, &brush, strokewidth, &stroke_style);
 
-            surface.EndDraw();
+            surface.EndDraw()?;
 
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
@@ -340,8 +272,11 @@ impl OverlayImpl {
             let factory: IDWriteFactory2 = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)?;
 
             use std::os::windows::ffi::OsStrExt;
-            let font_name: Vec<u16> = std::ffi::OsStr::new(properties.font.as_str()).encode_wide().chain([0u16].iter().copied()).collect();
-            
+            let font_name: Vec<u16> = std::ffi::OsStr::new(properties.font.as_str())
+                .encode_wide()
+                .chain([0u16].iter().copied())
+                .collect();
+
             let font_name_string = PCWSTR::from_raw(font_name.as_ptr());
             let font_height = properties.size;
 
@@ -371,14 +306,20 @@ impl OverlayImpl {
 
             format.SetTextAlignment(text_align)?;
             format.SetParagraphAlignment(paragraph_align)?;
-            
-            Ok(PreparedFont{
-                text_format: Arc::new(format)
+
+            Ok(PreparedFont {
+                text_format: Arc::new(format),
             })
         }
     }
 
-    pub fn draw_text(&mut self, text: &str, layout: &Rect, color: &Color, font: &PreparedFont) -> Result<IDVisual> {
+    pub fn draw_text(
+        &mut self,
+        text: &str,
+        layout: &Rect,
+        color: &Color,
+        font: &PreparedFont,
+    ) -> Result<IDVisual> {
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(layout.min.x)?;
@@ -398,19 +339,20 @@ impl OverlayImpl {
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
             // dc.Clear(Some(&D2D1_COLOR_F {
-                // r: 1.0,
-                // g: 1.0,
-                // b: 1.0,
-                // a: 0.0,
+            // r: 1.0,
+            // g: 1.0,
+            // b: 1.0,
+            // a: 0.0,
             // }));
 
             // let format = create_text_format()?;
 
-            let brush: ID2D1Brush = dc
-                .CreateSolidColorBrush(&(*color).into(), None)?
-                .cast()?;
+            let brush: ID2D1Brush = dc.CreateSolidColorBrush(&(*color).into(), None)?.cast()?;
             use std::os::windows::ffi::OsStrExt;
-            let windows_string: Vec<u16> = std::ffi::OsStr::new(text).encode_wide().chain([0u16].iter().copied()).collect();
+            let windows_string: Vec<u16> = std::ffi::OsStr::new(text)
+                .encode_wide()
+                .chain([0u16].iter().copied())
+                .collect();
             dc.DrawText(
                 &windows_string,
                 &*font.text_format,
@@ -425,13 +367,12 @@ impl OverlayImpl {
                 DWRITE_MEASURING_MODE_NATURAL,
             );
 
-            surface.EndDraw();
+            surface.EndDraw()?;
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
             Ok(visual.clone())
         }
     }
-
 
     pub fn load_texture<P: AsRef<std::path::Path>>(&mut self, path: P) -> Result<ImageTexture> {
         unsafe {
@@ -439,9 +380,12 @@ impl OverlayImpl {
             let factory: IWICImagingFactory2 =
                 CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
 
-            let path : std::path::PathBuf = std::path::PathBuf::from(path.as_ref());
+            let path: std::path::PathBuf = std::path::PathBuf::from(path.as_ref());
             use std::os::windows::ffi::OsStrExt;
-            let windows_string: Vec<u16>  = std::ffi::OsString::from(&path).encode_wide().chain([0u16].iter().copied()).collect();
+            let windows_string: Vec<u16> = std::ffi::OsString::from(&path)
+                .encode_wide()
+                .chain([0u16].iter().copied())
+                .collect();
             // println!("windows string: {windows_string:?}");
             let z = PCWSTR::from_raw(windows_string.as_ptr());
 
@@ -458,7 +402,7 @@ impl OverlayImpl {
 
             image.Initialize(
                 &source,
-                &GUID_WICPixelFormat32bppPBGRA , // not GUID_WICPixelFormat32bppBGRA; https://stackoverflow.com/a/25009124
+                &GUID_WICPixelFormat32bppPBGRA, // not GUID_WICPixelFormat32bppBGRA; https://stackoverflow.com/a/25009124
                 WICBitmapDitherTypeNone,
                 None,
                 0.0,
@@ -467,10 +411,17 @@ impl OverlayImpl {
             let image = Arc::new(image);
             println!("bitmap good");
 
-            Ok(ImageTexture{image})
+            Ok(ImageTexture { image })
         }
     }
-    pub fn draw_texture(&mut self, position: &Point, texture: &ImageTexture, texture_region: &Rect, color: &Color, alpha: f32) -> Result<IDVisual> {
+    pub fn draw_texture(
+        &mut self,
+        position: &Point,
+        texture: &ImageTexture,
+        texture_region: &Rect,
+        color: &Color,
+        alpha: f32,
+    ) -> Result<IDVisual> {
         unsafe {
             let visual = create_visual(self.desktop.as_ref().unwrap())?;
             visual.SetOffsetX2(position.x)?;
@@ -489,9 +440,8 @@ impl OverlayImpl {
 
             dc.Clear(Some(&(*color).into()));
 
-
-            let properties = D2D1_BITMAP_PROPERTIES1  {
-                pixelFormat: D2D1_PIXEL_FORMAT  {
+            let properties = D2D1_BITMAP_PROPERTIES1 {
+                pixelFormat: D2D1_PIXEL_FORMAT {
                     format: DXGI_FORMAT_B8G8R8A8_UNORM,
                     alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
                     // ..Default::default()
@@ -504,7 +454,6 @@ impl OverlayImpl {
                 dc_offset.x as f32,
                 dc_offset.y as f32,
             ));
-
 
             dc.DrawBitmap(
                 &bitmap,
@@ -520,13 +469,11 @@ impl OverlayImpl {
                 None,
             );
 
-            surface.EndDraw();
+            surface.EndDraw()?;
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
             Ok(visual.clone())
         }
-
     }
-
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
@@ -561,7 +508,7 @@ impl OverlayImpl {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
             };
-            GetMonitorInfoA(monitor, &mut monitor_info);
+            let _ = GetMonitorInfoA(monitor, &mut monitor_info);
             // println!("Setting size to: {:?}", monitor_info.rcMonitor);
             Ok(monitor_info.rcMonitor)
         }
@@ -569,7 +516,6 @@ impl OverlayImpl {
 
     fn create_handler(&mut self) -> Result<()> {
         unsafe {
-            let monitor = MonitorFromWindow(self.handle, MONITOR_DEFAULTTOPRIMARY);
             let desired_size = self.desired_window_size()?;
             println!("Setting size to: {:?}", desired_size);
             SetWindowPos(
@@ -636,7 +582,6 @@ impl OverlayImpl {
     }
 }
 
-
 fn create_device_3d() -> Result<ID3D11Device> {
     let mut device = None;
 
@@ -683,7 +628,6 @@ fn create_surface(
         )
     }
 }
-
 
 pub fn setup() -> Result<()> {
     unsafe {

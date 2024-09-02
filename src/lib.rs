@@ -8,16 +8,21 @@ use std::sync::Arc;
 //  - Should be thread safe (all of it)
 //  - Need a wrapper with an interior Arc.
 
-
 mod windows;
-use windows::{OverlayImpl, IDVisual, ImageTexture, PreparedFont};
+use windows::{IDVisual, ImageTexture, OverlayImpl, PreparedFont};
 
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-struct VisualToken {
+#[derive(Clone)]
+pub struct VisualToken {
     overlay: Arc<Mutex<OverlayImpl>>,
     visual: IDVisual,
+}
+impl std::fmt::Debug for VisualToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "VisualToken {:?}", &self.visual)
+    }
 }
 
 impl Drop for VisualToken {
@@ -35,7 +40,6 @@ pub struct Overlay {
 }
 
 impl Overlay {
-
     /// Create a new overlay
     pub fn new() -> std::result::Result<Overlay, Error> {
         let window = Arc::new(Mutex::new(OverlayImpl::new()?));
@@ -47,12 +51,15 @@ impl Overlay {
         Ok(Self { overlay: window })
     }
 
-
     /// Prepare a font for usage.
     ///
     /// Draw arbitrary geometry on the screen. You may need to offset by half a pixel to ensure you get pixel-perfect
     /// crisp lines.
-    pub fn draw_geometry(&self, geometry: &DrawGeometry, stroke: &Stroke) -> std::result::Result<VisualToken, Error> {
+    pub fn draw_geometry(
+        &self,
+        geometry: &DrawGeometry,
+        stroke: &Stroke,
+    ) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
             let visual = wlock.draw_geometry(geometry, stroke)?;
@@ -66,7 +73,10 @@ impl Overlay {
     /// Prepare a font for usage.
     ///
     /// Initialises the font according to the properties, this handle is passed to [`draw_text`].
-    pub fn prepare_font(&self, properties: &TextProperties) -> std::result::Result<PreparedFont, Error> {
+    pub fn prepare_font(
+        &self,
+        properties: &TextProperties,
+    ) -> std::result::Result<PreparedFont, Error> {
         let mut wlock = self.overlay.lock();
         Ok(wlock.prepare_font(properties)?)
     }
@@ -77,7 +87,13 @@ impl Overlay {
     /// * `layout` The layout rectangle to stay in.
     /// * `color` The color with which to draw.
     /// * `font` The prepared font as returned by [`prepare_font`].
-    pub fn draw_text(&self, text: &str, layout: &Rect, color: &Color, font: &PreparedFont) -> std::result::Result<VisualToken, Error> {
+    pub fn draw_text(
+        &self,
+        text: &str,
+        layout: &Rect,
+        color: &Color,
+        font: &PreparedFont,
+    ) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
             let visual = wlock.draw_text(text, layout, color, font)?;
@@ -88,9 +104,11 @@ impl Overlay {
         }
     }
 
-
     /// Load a texture from disk for later use.
-    pub fn load_texture<P: AsRef<std::path::Path>>(&self, path: P) -> std::result::Result<ImageTexture, Error> {
+    pub fn load_texture<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> std::result::Result<ImageTexture, Error> {
         {
             let mut wlock = self.overlay.lock();
             Ok(wlock.load_texture(path)?)
@@ -105,7 +123,14 @@ impl Overlay {
     /// * `texture_region` The area of the texture to be drawn.
     /// * `color` The background color drawn before the texture.
     /// * `alpha` The alpha at which the texture is drawn over the background.
-    pub fn draw_texture(&self, position: &Point, texture: &ImageTexture, texture_region: &Rect, color: &Color, alpha: f32) -> std::result::Result<VisualToken, Error> {
+    pub fn draw_texture(
+        &self,
+        position: &Point,
+        texture: &ImageTexture,
+        texture_region: &Rect,
+        color: &Color,
+        alpha: f32,
+    ) -> std::result::Result<VisualToken, Error> {
         {
             let mut wlock = self.overlay.lock();
             let visual = wlock.draw_texture(position, texture, texture_region, color, alpha)?;
@@ -117,9 +142,8 @@ impl Overlay {
     }
 }
 
-
 #[derive(Copy, Clone, Debug, Default)]
-pub enum TextAlignment{
+pub enum TextAlignment {
     /// Align to the minimum possible value. (Left or Top)
     Min,
     #[default]
@@ -128,12 +152,12 @@ pub enum TextAlignment{
     /// Align to the maximum possible value. (Right or Bottom)
     Max,
     /// Only applicable to horizontal; justified rendering.
-    Justified
+    Justified,
 }
 
 /// Properties for the font and text.
 #[derive(Clone, Debug)]
-pub struct TextProperties{
+pub struct TextProperties {
     /// The font family name, on windows defaults to 'Arial'.
     font: String,
     /// The size of the font in device independent pixels.
@@ -165,7 +189,12 @@ pub struct Color {
     pub a: u8,
 }
 impl Color {
-    pub const TRANSPARENT: Color = Color{r: 0, g: 0, b: 0, a: 0};
+    pub const TRANSPARENT: Color = Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
+    };
     pub fn transparent(&self) -> Self {
         Color {
             r: self.r,
@@ -191,9 +220,9 @@ pub struct Point {
     pub y: f32,
 }
 impl Point {
-    const ORIGIN: Point = Point{x: 0.0, y: 0.0};
+    const ORIGIN: Point = Point { x: 0.0, y: 0.0 };
     pub fn new(x: f32, y: f32) -> Self {
-        Self{x, y        }
+        Self { x, y }
     }
 }
 impl std::ops::Add<Point> for Point {
@@ -207,21 +236,21 @@ impl std::ops::Add<Point> for Point {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Rect{
+pub struct Rect {
     pub min: Point,
     pub max: Point,
 }
 impl Rect {
     pub fn from(x: f32, y: f32) -> Self {
         Self {
-            min: Point{x, y},
-            max: Point::ORIGIN
+            min: Point { x, y },
+            max: Point::ORIGIN,
         }
     }
-    pub fn sized(self, w: f32, h: f32) -> Self{
+    pub fn sized(self, w: f32, h: f32) -> Self {
         Self {
             min: self.min,
-            max: self.min + Point::new(w,h)
+            max: self.min + Point::new(w, h),
         }
     }
     pub fn width(&self) -> f32 {
@@ -258,14 +287,12 @@ pub enum GeometryElement {
 }
 
 #[derive(Clone, Debug)]
-struct DrawGeometry {
+pub struct DrawGeometry {
     pub elements: Vec<GeometryElement>,
 }
 impl DrawGeometry {
     pub fn new() -> Self {
-        Self {
-            elements: vec![]
-        }
+        Self { elements: vec![] }
     }
     fn appended(self, e: GeometryElement) -> Self {
         let mut elements = self.elements;
@@ -273,11 +300,10 @@ impl DrawGeometry {
         Self { elements }
     }
     pub fn hollow(self, x: f32, y: f32) -> Self {
-       self.appended(GeometryElement::Start {
-                start: Point { x, y },
-                filled: false,
-            })
-        
+        self.appended(GeometryElement::Start {
+            start: Point { x, y },
+            filled: false,
+        })
     }
     pub fn closed(self) -> Self {
         self.appended(GeometryElement::End { closed: true })
@@ -287,7 +313,11 @@ impl DrawGeometry {
     }
 
     pub fn rectangle(self, rect: &Rect) -> Self {
-        self.hollow(rect.min.x, rect.min.y).line(rect.min.x, rect.max.y).line(rect.max.x, rect.max.y).line(rect.max.x, rect.min.y).closed()
+        self.hollow(rect.min.x, rect.min.y)
+            .line(rect.min.x, rect.max.y)
+            .line(rect.max.x, rect.max.y)
+            .line(rect.max.x, rect.min.y)
+            .closed()
     }
 }
 
@@ -295,11 +325,8 @@ pub fn main() -> std::result::Result<(), Error> {
     windows::setup()?;
     let window = Overlay::new()?;
 
-
     let twindow = window.clone();
-    let msg_loop_thread = std::thread::spawn(move || {
-
-
+    let _msg_loop_thread = std::thread::spawn(move || {
         let color = Color {
             r: 255,
             g: 0,
@@ -307,12 +334,33 @@ pub fn main() -> std::result::Result<(), Error> {
             a: 128,
         };
         let alpha = 0.5;
-        let image2 = twindow.load_texture(std::path::PathBuf::from("PNG_transparency_demonstration_1.png")).expect("failed to load image");
-        let t2 = twindow.draw_texture(&Point::new(500.0, 500.0), &image2, &Rect::from(0.0, 0.0).sized(200.0, 200.0), &color, alpha).expect("texture draw failed");
+        let image2 = twindow
+            .load_texture(std::path::PathBuf::from(
+                "PNG_transparency_demonstration_1.png",
+            ))
+            .expect("failed to load image");
+        let _t2 = twindow
+            .draw_texture(
+                &Point::new(500.0, 500.0),
+                &image2,
+                &Rect::from(0.0, 0.0).sized(200.0, 200.0),
+                &color,
+                alpha,
+            )
+            .expect("texture draw failed");
 
-        let image = twindow.load_texture(std::path::PathBuf::from("image.jpg")).expect("failed to load image");
-        let t = twindow.draw_texture(&Point::new(1000.0, 500.0), &image, &Rect::from(0.0, 0.0).sized(200.0, 200.0), &Color::TRANSPARENT, alpha).expect("texture draw failed");
-
+        let image = twindow
+            .load_texture(std::path::PathBuf::from("image.jpg"))
+            .expect("failed to load image");
+        let _t = twindow
+            .draw_texture(
+                &Point::new(1000.0, 500.0),
+                &image,
+                &Rect::from(0.0, 0.0).sized(200.0, 200.0),
+                &Color::TRANSPARENT,
+                alpha,
+            )
+            .expect("texture draw failed");
 
         let geometry = DrawGeometry::new().rectangle(&Rect::from(200.0, 200.0).sized(200.0, 300.0));
         let color = Color {
@@ -323,16 +371,18 @@ pub fn main() -> std::result::Result<(), Error> {
         };
         let stroke = Stroke { color, width: 1.0 };
 
-        let v = twindow
+        let _v = twindow
             .draw_geometry(&geometry, &stroke)
             .expect("create image failed");
 
-        let font = twindow.prepare_font(&TextProperties{
-            size: 32.0,
-            horizontal_align: TextAlignment::Min,
-            vertical_align: TextAlignment::Min,
-            ..Default::default()
-        }).expect("preparing the font failed");
+        let font = twindow
+            .prepare_font(&TextProperties {
+                size: 32.0,
+                horizontal_align: TextAlignment::Min,
+                vertical_align: TextAlignment::Min,
+                ..Default::default()
+            })
+            .expect("preparing the font failed");
 
         let color = Color {
             r: 255,
@@ -340,13 +390,20 @@ pub fn main() -> std::result::Result<(), Error> {
             b: 255,
             a: 255,
         };
-        let v = twindow.draw_text("hello there we are rendering text", &Rect::from(200.0, 200.0).sized(200.0, 300.0), &color, &font).expect("create image failed");
-
+        let _v = twindow
+            .draw_text(
+                "hello there we are rendering text",
+                &Rect::from(200.0, 200.0).sized(200.0, 300.0),
+                &color,
+                &font,
+            )
+            .expect("create image failed");
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        let z =   {
-            let geometry = DrawGeometry::new().hollow(200.0, 10.0)
+        let _z = {
+            let geometry = DrawGeometry::new()
+                .hollow(200.0, 10.0)
                 .line(100.0, 100.0)
                 .closed();
             let color = Color {
@@ -363,7 +420,6 @@ pub fn main() -> std::result::Result<(), Error> {
             std::thread::sleep(std::time::Duration::from_millis(500));
             v
         };
-
 
         println!("blocking now");
         std::thread::sleep(std::time::Duration::from_millis(1000000));
