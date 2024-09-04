@@ -1,7 +1,13 @@
+#![allow(unused_variables, unused_imports, unreachable_code)]
 use crate::{
     CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, Error, GeometryElement, LineJoin,
     LineStyle, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
 };
+
+/*
+    We can probably draw on https://github.com/ftorkler/x11-overlay for a lot of the logic.
+*/
+
 
 use std::sync::Arc;
 
@@ -21,8 +27,6 @@ impl std::fmt::Debug for PreparedFont {
     }
 }
 
-// The IDCompositionVisual appears to be a tree, as per;
-// https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
 pub type IDVisual = usize;
 
 pub struct OverlayImpl {}
@@ -60,6 +64,7 @@ impl OverlayImpl {
         color: &Color,
         font: &PreparedFont,
     ) -> Result<IDVisual, Error> {
+        println!("would print {text}");
         Ok(3)
     }
 
@@ -69,6 +74,7 @@ impl OverlayImpl {
     ) -> Result<ImageTexture, Error> {
         Ok(ImageTexture {})
     }
+
     pub fn draw_texture(
         &mut self,
         position: &Point,
@@ -83,20 +89,14 @@ impl OverlayImpl {
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
         Ok(())
     }
-
-    fn create_handler(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 // Is this legal?
 // unsafe impl Send for OverlayImpl {}
 pub fn run_msg_loop() -> Result<(), Error> {
-    unsafe {
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        Ok(())
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    Ok(())
 }
 
 pub fn setup() -> Result<(), Error> {

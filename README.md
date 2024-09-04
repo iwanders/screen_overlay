@@ -1,6 +1,6 @@
 # screen_overlay
 
-A Rust crate that allows drawing click-through overlays over full screen applications in Windows:
+A Rust crate that allows drawing click-through overlays over full screen applications (currently only implemented for Windows, X11 to follow):
 - Bitmap images, support transparancy (tested with a png)
 - Text
 - Lines, circles, rectangles

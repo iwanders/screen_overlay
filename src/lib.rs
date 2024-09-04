@@ -7,6 +7,8 @@ use std::sync::Arc;
 //  - Drawable -> Returns RAII handle with interface to drawable.
 //  - Should be thread safe (all of it)
 //  - Need a wrapper with an interior Arc.
+//
+// OverlayImpl is currently a weak contract between windows and linux, should we change that?
 
 #[cfg(target_os = "linux")]
 #[cfg_attr(target_os = "linux", path = "linux.rs")]
