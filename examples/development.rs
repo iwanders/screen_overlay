@@ -1,11 +1,11 @@
-
 use screen_overlay::{
-    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle, CircleDirection, OverlayConfig, Overlay, Error
+    CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, Error, GeometryElement, LineJoin,
+    LineStyle, Overlay, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
 };
 
 pub fn main() -> std::result::Result<(), Error> {
     screen_overlay::setup()?;
-    let window = Overlay::new_with_config(&OverlayConfig{
+    let window = Overlay::new_with_config(&OverlayConfig {
         name: "Awesome Overlay".to_owned(),
         ..Default::default()
     })?;
@@ -56,7 +56,7 @@ pub fn main() -> std::result::Result<(), Error> {
             a: 255,
         };
         let stroke = Stroke { color, width: 1.0 };
-        let text_box_style = LineStyle{
+        let text_box_style = LineStyle {
             dash_style: DashStyle::Dash,
             // line_join: LineJoin::Round,
             ..Default::default()
@@ -92,7 +92,6 @@ pub fn main() -> std::result::Result<(), Error> {
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        
         let geometry = DrawGeometry::new().circle(&Point::new(510.0, 500.0), 10.0);
         let color = Color {
             r: 0,
@@ -105,7 +104,6 @@ pub fn main() -> std::result::Result<(), Error> {
         let _v = twindow
             .draw_geometry(&geometry, &stroke, &Default::default())
             .expect("create image failed");
-
 
         let _z = {
             let geometry = DrawGeometry::new()

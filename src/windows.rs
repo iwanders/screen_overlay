@@ -24,7 +24,8 @@ use windows::{
 };
 
 use crate::{
-    Color, DrawGeometry, GeometryElement, Point, Rect, Stroke, TextAlignment, TextProperties, LineStyle, CapStyle, LineJoin,DashStyle, CircleDirection, OverlayConfig
+    CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, GeometryElement, LineJoin,
+    LineStyle, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
 };
 
 use std::sync::Arc;
@@ -78,7 +79,7 @@ impl From<Rect> for D2D_RECT_F {
     }
 }
 
-impl From<CapStyle> for D2D1_CAP_STYLE  {
+impl From<CapStyle> for D2D1_CAP_STYLE {
     fn from(c: CapStyle) -> Self {
         match c {
             CapStyle::Flat => D2D1_CAP_STYLE_FLAT,
@@ -89,7 +90,7 @@ impl From<CapStyle> for D2D1_CAP_STYLE  {
     }
 }
 
-impl From<LineJoin> for D2D1_LINE_JOIN   {
+impl From<LineJoin> for D2D1_LINE_JOIN {
     fn from(c: LineJoin) -> Self {
         match c {
             LineJoin::Miter => D2D1_LINE_JOIN_MITER,
@@ -100,7 +101,7 @@ impl From<LineJoin> for D2D1_LINE_JOIN   {
     }
 }
 
-impl From<DashStyle> for D2D1_DASH_STYLE   {
+impl From<DashStyle> for D2D1_DASH_STYLE {
     fn from(c: DashStyle) -> Self {
         match c {
             DashStyle::Solid => D2D1_DASH_STYLE_SOLID,
@@ -115,8 +116,8 @@ impl From<DashStyle> for D2D1_DASH_STYLE   {
 impl From<CircleDirection> for D2D1_SWEEP_DIRECTION {
     fn from(c: CircleDirection) -> Self {
         match c {
-            CircleDirection::CounterClockWise => D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE ,
-            CircleDirection::ClockWise => D2D1_SWEEP_DIRECTION_CLOCKWISE ,
+            CircleDirection::CounterClockWise => D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
+            CircleDirection::ClockWise => D2D1_SWEEP_DIRECTION_CLOCKWISE,
         }
     }
 }
@@ -175,15 +176,18 @@ impl OverlayImpl {
             let atom = RegisterClassA(&wc);
             debug_assert!(atom != 0);
 
-            let mut ex_props = WS_EX_COMPOSITED | WS_EX_LAYERED  | WS_EX_TRANSPARENT;
+            let mut ex_props = WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT;
             if !config.task_bar {
-                ex_props |= WS_EX_NOACTIVATE;// <- hides from taskbar
+                ex_props |= WS_EX_NOACTIVATE; // <- hides from taskbar
             }
             if config.on_top {
                 ex_props |= WS_EX_TOPMOST;
             }
 
-            let window_name: Vec<u8> = std::ffi::OsStr::new(config.name.as_str()).as_encoded_bytes().iter().copied()
+            let window_name: Vec<u8> = std::ffi::OsStr::new(config.name.as_str())
+                .as_encoded_bytes()
+                .iter()
+                .copied()
                 .chain([0u8].iter().copied())
                 .collect();
 
@@ -260,7 +264,12 @@ impl OverlayImpl {
         }
     }
 
-    pub fn draw_geometry(&mut self, geometry: &DrawGeometry, stroke: &Stroke, line_style: &LineStyle) -> Result<IDVisual> {
+    pub fn draw_geometry(
+        &mut self,
+        geometry: &DrawGeometry,
+        stroke: &Stroke,
+        line_style: &LineStyle,
+    ) -> Result<IDVisual> {
         // Objects used together must be created from the same factory instance.
         unsafe {
             let (surface, visual) = self.create_fullscreen_surface_visual()?;
@@ -277,12 +286,15 @@ impl OverlayImpl {
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
             // let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
             let sink: ID2D1GeometrySink = path_geom.Open()?.cast()?;
-            let mut is_started: bool  = false;
+            let mut is_started: bool = false;
             for el in geometry.elements.iter() {
                 match el {
                     GeometryElement::Start { start, filled } => {
                         if is_started {
-                            return Err(Error::new(ERROR_CANCELLED.into(), "cant open geometry if one is already open"));
+                            return Err(Error::new(
+                                ERROR_CANCELLED.into(),
+                                "cant open geometry if one is already open",
+                            ));
                         }
                         is_started = true;
                         let start_style = if *filled {
@@ -294,10 +306,13 @@ impl OverlayImpl {
                     }
                     GeometryElement::End { closed } => {
                         if !is_started {
-                            return Err(Error::new(ERROR_CANCELLED.into(), "cant close geometry if it is not open"));
+                            return Err(Error::new(
+                                ERROR_CANCELLED.into(),
+                                "cant close geometry if it is not open",
+                            ));
                         }
                         is_started = false;
-                        
+
                         let close_style = if *closed {
                             D2D1_FIGURE_END_CLOSED
                         } else {
@@ -308,7 +323,12 @@ impl OverlayImpl {
                     GeometryElement::Line(point) => {
                         sink.AddLines(&[(*point).into()]);
                     }
-                    GeometryElement::Arc{end_point, radius, angle, direction} => {
+                    GeometryElement::Arc {
+                        end_point,
+                        radius,
+                        angle,
+                        direction,
+                    } => {
                         let segment = D2D1_ARC_SEGMENT {
                             point: (*end_point).into(),
                             size: D2D_SIZE_F {
@@ -317,13 +337,14 @@ impl OverlayImpl {
                             },
                             rotationAngle: *angle,
                             sweepDirection: (*direction).into(),
-                            arcSize: if *angle >= 180.0 {D2D1_ARC_SIZE_LARGE} else {D2D1_ARC_SIZE_SMALL},
+                            arcSize: if *angle >= 180.0 {
+                                D2D1_ARC_SIZE_LARGE
+                            } else {
+                                D2D1_ARC_SIZE_SMALL
+                            },
                         };
-                        sink.AddArc(
-                            &segment
-                        );
-                    }
-                    // z => todo!("Missing implementation for {z:?}"),
+                        sink.AddArc(&segment);
+                    } // z => todo!("Missing implementation for {z:?}"),
                 }
             }
             sink.Close()?;

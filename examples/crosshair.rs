@@ -1,11 +1,8 @@
-
-use screen_overlay::{
-    Color, DrawGeometry, Point, Stroke, OverlayConfig, Overlay, Error,
-};
+use screen_overlay::{Color, DrawGeometry, Error, Overlay, OverlayConfig, Point, Stroke};
 
 pub fn main() -> std::result::Result<(), Error> {
     screen_overlay::setup()?;
-    let window = Overlay::new_with_config(&OverlayConfig{
+    let window = Overlay::new_with_config(&OverlayConfig {
         task_bar: true,
         on_top: true,
         name: "Crosshair".to_owned(),
@@ -22,8 +19,10 @@ pub fn main() -> std::result::Result<(), Error> {
     let left = crosshair_pos + Point::new(-size, 0.0);
     let right = crosshair_pos + Point::new(size, 0.0);
 
-
-    let geometry = DrawGeometry::new().line_segment(&top, &below).line_segment(&left, &right).circle(&crosshair_pos, size * 0.75);
+    let geometry = DrawGeometry::new()
+        .line_segment(&top, &below)
+        .line_segment(&left, &right)
+        .circle(&crosshair_pos, size * 0.75);
     let color = Color {
         r: 0,
         g: 255,
@@ -33,7 +32,6 @@ pub fn main() -> std::result::Result<(), Error> {
     let stroke = Stroke { color, width: 2.0 };
 
     let _crosshair = window.draw_geometry(&geometry, &stroke, &Default::default())?;
-
 
     Ok(screen_overlay::block_and_loop()?)
 }
