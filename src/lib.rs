@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 // This started based on the direct composition example:
 // https://github.com/microsoft/windows-rs/tree/ef06753b0df2aaa16894416191bcde328b9d6ffb/crates/samples/windows/dcomp
 
@@ -180,7 +182,7 @@ impl Overlay {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TextAlignment {
     /// Align to the minimum possible value. (Left or Top)
     Min,
@@ -194,7 +196,7 @@ pub enum TextAlignment {
 }
 
 /// Properties for the font and text.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TextProperties {
     /// The font family name, on windows defaults to 'Arial'.
     pub font: String,
@@ -218,7 +220,7 @@ impl Default for TextProperties {
 }
 
 /// Color representation with alpha.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -246,13 +248,13 @@ impl Color {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Stroke {
     pub color: Color,
     pub width: f32,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub enum CapStyle {
     #[default]
     Flat,
@@ -261,7 +263,7 @@ pub enum CapStyle {
     Triangle,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub enum LineJoin {
     #[default]
     Miter,
@@ -270,7 +272,7 @@ pub enum LineJoin {
     MiterOrBevel,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub enum DashStyle {
     #[default]
     Solid,
@@ -280,7 +282,7 @@ pub enum DashStyle {
     DashDotDot,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct LineStyle {
     pub start_cap: CapStyle,
     pub end_cap: CapStyle,
@@ -293,7 +295,7 @@ pub struct LineStyle {
     pub dash_offset: f32,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -314,7 +316,7 @@ impl std::ops::Add<Point> for Point {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub min: Point,
     pub max: Point,
@@ -340,13 +342,13 @@ impl Rect {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CircleDirection {
     CounterClockWise,
     ClockWise,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GeometryElement {
     Start {
         start: Point,
@@ -365,7 +367,7 @@ pub enum GeometryElement {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DrawGeometry {
     pub elements: Vec<GeometryElement>,
 }
