@@ -8,11 +8,18 @@ use std::sync::Arc;
 //  - Should be thread safe (all of it)
 //  - Need a wrapper with an interior Arc.
 
-mod windows;
-use windows::{IDVisual, ImageTexture, OverlayImpl, PreparedFont};
+#[cfg(target_os = "linux")]
+#[cfg_attr(target_os = "linux", path = "linux.rs")]
+mod backend;
 
-pub use windows::setup as setup;
-pub use windows::run_msg_loop as block_and_loop;
+#[cfg(target_os = "windows")]
+#[cfg_attr(target_os = "windows", path = "windows.rs")]
+mod backend;
+
+use backend::{IDVisual, ImageTexture, OverlayImpl, PreparedFont};
+
+pub use backend::run_msg_loop as block_and_loop;
+pub use backend::setup;
 
 use parking_lot::Mutex;
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -69,7 +76,7 @@ impl Overlay {
         Self::new_with_config(&Default::default())
     }
 
-    pub fn new_with_config(config: &OverlayConfig) -> std::result::Result<Overlay, Error>{
+    pub fn new_with_config(config: &OverlayConfig) -> std::result::Result<Overlay, Error> {
         let window = Arc::new(Mutex::new(OverlayImpl::new()?));
         {
             let mut wlock = window.lock();
@@ -284,7 +291,6 @@ pub struct LineStyle {
     pub dash_offset: f32,
 }
 
-
 #[derive(Copy, Clone, Debug)]
 pub struct Point {
     pub x: f32,
@@ -388,9 +394,7 @@ impl DrawGeometry {
     }
 
     pub fn line_segment(self, p0: &Point, p1: &Point) -> Self {
-        self.hollow(p0.x, p0.y)
-            .line(p1.x, p1.y)
-            .closed()
+        self.hollow(p0.x, p0.y).line(p1.x, p1.y).closed()
     }
 
     pub fn rectangle(self, rect: &Rect) -> Self {
@@ -402,21 +406,30 @@ impl DrawGeometry {
     }
 
     pub fn circle(self, position: &Point, radius: f32) -> Self {
-        let start_of_circle = Point { x: position.x + radius, y: position.y };
-        let half_circle = Point { x: position.x - radius, y: position.y };
+        let start_of_circle = Point {
+            x: position.x + radius,
+            y: position.y,
+        };
+        let half_circle = Point {
+            x: position.x - radius,
+            y: position.y,
+        };
         self.appended(GeometryElement::Start {
             start: start_of_circle,
             filled: false,
-        }).appended(GeometryElement::Arc{
+        })
+        .appended(GeometryElement::Arc {
             end_point: half_circle,
             radius,
             angle: 0.0,
-            direction: CircleDirection::CounterClockWise
-        }).appended(GeometryElement::Arc{
+            direction: CircleDirection::CounterClockWise,
+        })
+        .appended(GeometryElement::Arc {
             end_point: start_of_circle,
             radius,
             angle: 0.0,
-            direction: CircleDirection::CounterClockWise
-        }).closed()
+            direction: CircleDirection::CounterClockWise,
+        })
+        .closed()
     }
 }
