@@ -248,6 +248,17 @@ impl Color {
     }
 }
 
+impl Default for Color {
+    fn default() -> Self {
+        Self {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Stroke {
     pub color: Color,
