@@ -730,6 +730,8 @@ fn create_surface(
     height: f32,
 ) -> Result<IDCompositionSurface> {
     unsafe {
+        // An application is responsible for managing the lifetime of logical surfaces.
+        // https://learn.microsoft.com/en-us/windows/win32/directcomp/composition-surface
         device.CreateSurface(
             width as u32,
             height as u32,

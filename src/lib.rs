@@ -41,6 +41,7 @@ impl std::fmt::Debug for VisualToken {
 
 impl Drop for VisualToken {
     fn drop(&mut self) {
+        println!("dropping");
         let mut wlock = self.overlay.lock();
         wlock
             .remove_visual(&self.visual)
