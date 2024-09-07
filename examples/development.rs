@@ -48,49 +48,53 @@ pub fn main() -> std::result::Result<(), Error> {
             )
             .expect("texture draw failed");
 
-        let geometry = DrawGeometry::new().rectangle(&Rect::from(200.0, 200.0).sized(200.0, 300.0));
-        let color = Color {
-            r: 0,
-            g: 0,
-            b: 0,
-            a: 255,
-        };
-        let stroke = Stroke { color, width: 1.0 };
-        let text_box_style = LineStyle {
-            dash_style: DashStyle::Dash,
-            // line_join: LineJoin::Round,
-            ..Default::default()
-        };
 
-        let _v = twindow
-            .draw_geometry(&geometry, &stroke, &text_box_style)
-            .expect("create image failed");
-
-        let font = twindow
-            .prepare_font(&TextProperties {
-                size: 32.0,
-                horizontal_align: TextAlignment::Min,
-                vertical_align: TextAlignment::Min,
+        for i in 0..50000 {
+        let geometry = DrawGeometry::new().rectangle(&Rect::from(200.0 + 50.0 * (i%5) as f32, 200.0).sized(200.0, 300.0));
+            let color = Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            };
+            let stroke = Stroke { color, width: 1.0 };
+            let text_box_style = LineStyle{
+                dash_style: DashStyle::Dash,
+                // line_join: LineJoin::Round,
                 ..Default::default()
-            })
-            .expect("preparing the font failed");
+            };
 
-        let color = Color {
-            r: 255,
-            g: 0,
-            b: 255,
-            a: 255,
-        };
-        let _v = twindow
-            .draw_text(
-                "hello there we are rendering text",
-                &Rect::from(200.0, 200.0).sized(200.0, 300.0),
-                &color,
-                &font,
-            )
-            .expect("create image failed");
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+            let _v = twindow
+                .draw_geometry(&geometry, &stroke, &text_box_style)
+                .expect("create image failed");
+
+            let font = twindow
+                .prepare_font(&TextProperties {
+                    size: 32.0,
+                    horizontal_align: TextAlignment::Min,
+                    vertical_align: TextAlignment::Min,
+                    ..Default::default()
+                })
+                .expect("preparing the font failed");
+
+            let color = Color {
+                r: 255,
+                g: 0,
+                b: 255,
+                a: 128,
+            };
+            let _v = twindow
+                .draw_text(
+                    "hello there we are rendering text",
+                    &Rect::from(200.0, 200.0).sized(200.0, 300.0),
+                    &color,
+                    &font,
+                )
+                .expect("create image failed");
+
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
 
         let geometry = DrawGeometry::new().circle(&Point::new(510.0, 500.0), 10.0);
         let color = Color {
