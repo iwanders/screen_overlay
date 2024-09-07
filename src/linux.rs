@@ -8,7 +8,6 @@ use crate::{
     We can probably draw on https://github.com/ftorkler/x11-overlay for a lot of the logic.
 */
 
-
 use std::sync::Arc;
 
 #[derive(Clone)]

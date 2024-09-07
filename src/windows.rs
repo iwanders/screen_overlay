@@ -128,13 +128,13 @@ impl From<CircleDirection> for D2D1_SWEEP_DIRECTION {
 #[derive(Clone, Debug)]
 pub struct IDVisual {
     visual: IDCompositionVisual2,
-    surface: IDCompositionSurface,
+    _surface: IDCompositionSurface,
 }
 impl IDVisual {
     pub fn visual_surface(visual: IDCompositionVisual2, surface: IDCompositionSurface) -> Self {
         Self {
-            surface,
-            visual
+            _surface: surface,
+            visual,
         }
     }
 }
@@ -301,7 +301,6 @@ impl OverlayImpl {
                 b: 1.0,
                 a: 0.0,
             }));
-
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
             // let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
@@ -608,17 +607,10 @@ impl OverlayImpl {
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
-            // let mut offset = Default::default();
-            // let dc: ID2D1DeviceContext = self.root_visual.as_ref().unwrap().BeginDraw(None, &mut offset)?;
-
             visual.visual.SetContent(None)?;
             let root_visual = self.root_visual.as_ref().unwrap();
             root_visual.RemoveVisual(&visual.visual)?;
-            // root_visual.Commit()?;
-            // self.root_visual.as_ref().unwrap().RemoveAllVisuals()?;
-            // core::unknown::Release(&visual.surface);
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
-            // dc.EndDraw()?;
         }
         Ok(())
     }
@@ -762,6 +754,7 @@ fn create_surface(
     unsafe {
         // An application is responsible for managing the lifetime of logical surfaces.
         // https://learn.microsoft.com/en-us/windows/win32/directcomp/composition-surface
+        // Can't find anything that does that, but it doesn't seem to be leaking right now?
         device.CreateSurface(
             width as u32,
             height as u32,

@@ -1,6 +1,17 @@
 use screen_overlay::{
-    CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, Error, GeometryElement, LineJoin,
-    LineStyle, Overlay, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
+    // CapStyle, CircleDirection, GeometryElement, LineJoin,
+    Color,
+    DashStyle,
+    DrawGeometry,
+    Error,
+    LineStyle,
+    Overlay,
+    OverlayConfig,
+    Point,
+    Rect,
+    Stroke,
+    TextAlignment,
+    TextProperties,
 };
 
 pub fn main() -> std::result::Result<(), Error> {
@@ -48,9 +59,8 @@ pub fn main() -> std::result::Result<(), Error> {
             )
             .expect("texture draw failed");
 
-
         for i in 0..50000 {
-            let pos = Rect::from(200.0 + 50.0 * (i%5) as f32, 200.0).sized(200.0, 300.0);
+            let pos = Rect::from(200.0 + 50.0 * (i % 5) as f32, 200.0).sized(200.0, 300.0);
             let geometry = DrawGeometry::new().rectangle(&pos);
             let color = Color {
                 r: 0,
@@ -59,12 +69,11 @@ pub fn main() -> std::result::Result<(), Error> {
                 a: 255,
             };
             let stroke = Stroke { color, width: 1.0 };
-            let text_box_style = LineStyle{
+            let text_box_style = LineStyle {
                 dash_style: DashStyle::Dash,
                 // line_join: LineJoin::Round,
                 ..Default::default()
             };
-
 
             let _v = twindow
                 .draw_geometry(&geometry, &stroke, &text_box_style)
@@ -86,12 +95,7 @@ pub fn main() -> std::result::Result<(), Error> {
                 a: 128,
             };
             let _v = twindow
-                .draw_text(
-                    "hello there we are rendering text",
-                    &pos,
-                    &color,
-                    &font,
-                )
+                .draw_text("hello there we are rendering text", &pos, &color, &font)
                 .expect("create image failed");
 
             std::thread::sleep(std::time::Duration::from_millis(1000));
