@@ -50,7 +50,8 @@ pub fn main() -> std::result::Result<(), Error> {
 
 
         for i in 0..50000 {
-        let geometry = DrawGeometry::new().rectangle(&Rect::from(200.0 + 50.0 * (i%5) as f32, 200.0).sized(200.0, 300.0));
+            let pos = Rect::from(200.0 + 50.0 * (i%5) as f32, 200.0).sized(200.0, 300.0);
+            let geometry = DrawGeometry::new().rectangle(&pos);
             let color = Color {
                 r: 0,
                 g: 0,
@@ -87,7 +88,7 @@ pub fn main() -> std::result::Result<(), Error> {
             let _v = twindow
                 .draw_text(
                     "hello there we are rendering text",
-                    &Rect::from(200.0, 200.0).sized(200.0, 300.0),
+                    &pos,
                     &color,
                     &font,
                 )

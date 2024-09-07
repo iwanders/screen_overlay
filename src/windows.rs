@@ -124,7 +124,20 @@ impl From<CircleDirection> for D2D1_SWEEP_DIRECTION {
 
 // The IDCompositionVisual appears to be a tree, as per;
 // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/DirectComposition/trait.IDCompositionVisual_Impl.html#tymethod.AddVisual
-pub type IDVisual = IDCompositionVisual2;
+// pub type IDVisual = IDCompositionVisual2;
+#[derive(Clone, Debug)]
+pub struct IDVisual {
+    visual: IDCompositionVisual2,
+    surface: IDCompositionSurface,
+}
+impl IDVisual {
+    pub fn visual_surface(visual: IDCompositionVisual2, surface: IDCompositionSurface) -> Self {
+        Self {
+            surface,
+            visual
+        }
+    }
+}
 
 pub struct OverlayImpl {
     handle: HWND,
@@ -282,6 +295,13 @@ impl OverlayImpl {
             let dc: ID2D1DeviceContext = surface.BeginDraw(None, &mut offset)?;
 
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
+            dc.Clear(Some(&D2D1_COLOR_F {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            }));
+
 
             let path_geom = dc.GetFactory()?.CreatePathGeometry()?;
             // let sink: ID2D1SimplifiedGeometrySink = path_geom.Open()?.cast()?;
@@ -373,7 +393,7 @@ impl OverlayImpl {
 
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
-            Ok(visual.clone())
+            Ok(IDVisual::visual_surface(visual, surface))
         }
     }
 
@@ -448,12 +468,12 @@ impl OverlayImpl {
 
             dc.SetTransform(&Matrix3x2::translation(offset.x as f32, offset.y as f32));
 
-            // dc.Clear(Some(&D2D1_COLOR_F {
-            // r: 1.0,
-            // g: 1.0,
-            // b: 1.0,
-            // a: 0.0,
-            // }));
+            dc.Clear(Some(&D2D1_COLOR_F {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            }));
 
             // let format = create_text_format()?;
 
@@ -480,7 +500,7 @@ impl OverlayImpl {
             surface.EndDraw()?;
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
 
-            Ok(visual.clone())
+            Ok(IDVisual::visual_surface(visual, surface))
         }
     }
 
@@ -581,14 +601,24 @@ impl OverlayImpl {
 
             surface.EndDraw()?;
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
-            Ok(visual.clone())
+
+            Ok(IDVisual::visual_surface(visual, surface))
         }
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<()> {
         unsafe {
-            self.root_visual.as_ref().unwrap().RemoveVisual(visual)?;
+            // let mut offset = Default::default();
+            // let dc: ID2D1DeviceContext = self.root_visual.as_ref().unwrap().BeginDraw(None, &mut offset)?;
+
+            visual.visual.SetContent(None)?;
+            let root_visual = self.root_visual.as_ref().unwrap();
+            root_visual.RemoveVisual(&visual.visual)?;
+            // root_visual.Commit()?;
+            // self.root_visual.as_ref().unwrap().RemoveAllVisuals()?;
+            // core::unknown::Release(&visual.surface);
             self.desktop.as_ref().map(|v| v.Commit()).unwrap()?;
+            // dc.EndDraw()?;
         }
         Ok(())
     }
