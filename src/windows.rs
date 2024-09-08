@@ -22,6 +22,9 @@ use windows::{
         UI::WindowsAndMessaging::*,
     },
 };
+/*
+    - There's currently a bug when main window changes between monitors, the overlay freezes?
+*/
 
 use crate::{
     CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, GeometryElement, LineJoin,

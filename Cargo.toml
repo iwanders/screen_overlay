@@ -43,3 +43,7 @@ features = [
     "Win32_UI_Shell",
     "Win32_UI_Controls",
 ]
+
+[target.'cfg(any(target_os = "linux"))'.dependencies]
+x11-dl = "2.21"
+
