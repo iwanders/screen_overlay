@@ -212,6 +212,9 @@ impl Default for TextProperties {
     fn default() -> Self {
         Self {
             // font: "Candara".to_owned(),
+            #[cfg(target_os = "linux")]
+            font: "Liberation Sans".to_owned(),
+            #[cfg(target_os = "windows")]
             font: "Arial".to_owned(),
             size: 16.0,
             horizontal_align: TextAlignment::default(),
@@ -246,6 +249,15 @@ impl Color {
     }
     pub fn a_f32(&self) -> f32 {
         self.a as f32 / 255.0
+    }
+    pub fn r_f32(&self) -> f32 {
+        self.r as f32 / 255.0
+    }
+    pub fn g_f32(&self) -> f32 {
+        self.g as f32 / 255.0
+    }
+    pub fn b_f32(&self) -> f32 {
+        self.b as f32 / 255.0
     }
 }
 

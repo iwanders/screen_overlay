@@ -9,7 +9,7 @@ use crate::{
 */
 
 use x11_dl::xlib::{self, Xlib, _XDisplay, TrueColor};
-use x11_dl::{xfixes, xft};
+use x11_dl::{xfixes, xft, xrender};
 
 use std::sync::Arc;
 
@@ -144,9 +144,11 @@ impl OverlayImpl {
     pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont, Error> {
         unsafe {
             let xft = xft::Xft::open()?;
+            // println!("font prop: {properties:?}");
             let font_name = std::ffi::OsString::from(&properties.font);
             let font_str = std::mem::transmute::<*const u8,_>(font_name.as_os_str().as_encoded_bytes().as_ptr());
             let font = (xft.XftFontOpenName)(self.display, *self.screen.as_ref().ok_or("no screen")?, font_str);
+            // println!("font prop: {font:?}");
             Ok(PreparedFont {
                 display: self.display,
                 font,
@@ -162,6 +164,40 @@ impl OverlayImpl {
         font: &PreparedFont,
     ) -> Result<IDVisual, Error> {
         println!("would print {text}");
+        unsafe {
+            let xft = xft::Xft::open()?;
+            let screen = *self.screen.as_ref().ok_or("draw_text called without screen created")?;
+            let window = *self.window.as_ref().ok_or("draw_text called without window created")?;
+            let visual_info = *self.visual_info.as_ref().ok_or("draw_text called without window created")?;
+            let colormap = (self.instance.XDefaultColormap)(self.display, screen);
+            let xft_draw = (xft.XftDrawCreate)(self.display, window, visual_info.visual, colormap);
+            let mut xft_color: xft::XftColor = std::mem::MaybeUninit::zeroed().assume_init();
+
+            // let color_name = std::ffi::OsString::from("#000000");
+            // let color_str = std::mem::transmute::<*const u8,_>(color_name.as_os_str().as_encoded_bytes().as_ptr());
+            // let status = (xft.XftColorAllocName)(self.display, visual_info.visual, colormap, color_str, &mut xft_color);
+            
+
+            let mut render_color : xrender::XRenderColor = std::mem::MaybeUninit::zeroed().assume_init();
+            render_color.red = ((color.r_f32() * color.a_f32()) * 255.0) as u16 * 255;
+            render_color.green = ((color.g_f32() * color.a_f32()) * 255.0) as u16 * 255;
+            render_color.blue = ((color.b_f32() * color.a_f32()) * 255.0) as u16 * 255;
+            render_color.alpha = color.a as u16 * 255;
+            let status = (xft.XftColorAllocValue)(self.display, visual_info.visual, colormap, &render_color, &mut xft_color);
+            if status == 0 {
+                return Err("could not allocate color".into());
+            }
+
+            // XftDrawStringUtf8(xftDraw, &xftColor, xftFont, x, y + xftFont->ascent, (const FcChar8*)text.c_str(), text.size());
+            let x = layout.min.x as i32;
+            let y = layout.min.y as i32 + (*(font.font)).ascent;
+            println!("x: {x}, y: {y}");
+            let b : Vec<u8> = text.as_bytes().iter().chain([0u8].iter()).copied().collect();
+            (xft.XftDrawStringUtf8)(xft_draw, &xft_color, font.font, x, y, b.as_ptr(), b.len() as i32);
+
+            // (self.instance.XClearWindow)(self.display, window);
+            (self.instance.XFlush)(self.display);
+        }
         Ok(3)
     }
 
@@ -188,10 +224,14 @@ impl OverlayImpl {
     }
 }
 // Is this legal?
-// unsafe impl Send for OverlayImpl {}
+
+
 pub fn run_msg_loop() -> Result<(), Error> {
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+    unsafe {
+        let instance = xlib::Xlib::open()?;
+        let display = (instance.XOpenDisplay)(std::ptr::null());
+        let mut event: xlib::XEvent = std::mem::MaybeUninit::zeroed().assume_init();
+        (instance.XNextEvent)(display, &mut event);
     }
     Ok(())
 }
