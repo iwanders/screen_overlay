@@ -43,7 +43,31 @@ impl Drop for PreparedFont {
     }
 }
 
-pub type IDVisual = usize;
+// pub type IDVisual = usize;
+#[derive(Clone, Debug)]
+pub enum IDVisual {
+    Text{
+        xft_draw: *mut xft::XftDraw,
+    },
+    None
+}
+impl Drop for IDVisual {
+    fn drop(&mut self){
+        unsafe {
+            match self {
+                IDVisual::Text{xft_draw} => {
+                    let xft = xft::Xft::open();
+                    if xft.is_err() {
+                        return; // how can we handle this? return of drop is void.
+                    }
+                    let font = (xft.unwrap().XftDrawDestroy)(*xft_draw);
+                },
+                IDVisual::None => {},
+            }
+        }
+    }
+}
+
 
 pub struct OverlayImpl {
     instance: Xlib,
@@ -138,7 +162,7 @@ impl OverlayImpl {
         stroke: &Stroke,
         line_style: &LineStyle,
     ) -> Result<IDVisual, Error> {
-        Ok(3)
+        Ok(IDVisual::None)
     }
 
     pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont, Error> {
@@ -168,15 +192,14 @@ impl OverlayImpl {
             let xft = xft::Xft::open()?;
             let screen = *self.screen.as_ref().ok_or("draw_text called without screen created")?;
             let window = *self.window.as_ref().ok_or("draw_text called without window created")?;
+
+            // This is a bit of a hack.
+            (self.instance.XClearWindow)(self.display, window);
+
             let visual_info = *self.visual_info.as_ref().ok_or("draw_text called without window created")?;
             let colormap = (self.instance.XDefaultColormap)(self.display, screen);
             let xft_draw = (xft.XftDrawCreate)(self.display, window, visual_info.visual, colormap);
             let mut xft_color: xft::XftColor = std::mem::MaybeUninit::zeroed().assume_init();
-
-            // let color_name = std::ffi::OsString::from("#000000");
-            // let color_str = std::mem::transmute::<*const u8,_>(color_name.as_os_str().as_encoded_bytes().as_ptr());
-            // let status = (xft.XftColorAllocName)(self.display, visual_info.visual, colormap, color_str, &mut xft_color);
-            
 
             let mut render_color : xrender::XRenderColor = std::mem::MaybeUninit::zeroed().assume_init();
             render_color.red = ((color.r_f32() * color.a_f32()) * 255.0) as u16 * 255;
@@ -195,10 +218,12 @@ impl OverlayImpl {
             let b : Vec<u8> = text.as_bytes().iter().chain([0u8].iter()).copied().collect();
             (xft.XftDrawStringUtf8)(xft_draw, &xft_color, font.font, x, y, b.as_ptr(), b.len() as i32);
 
-            // (self.instance.XClearWindow)(self.display, window);
             (self.instance.XFlush)(self.display);
+            // XftDrawDestroy XftColorFree!
+            Ok(IDVisual::Text{
+                xft_draw,
+            })
         }
-        Ok(3)
     }
 
     pub fn load_texture<P: AsRef<std::path::Path>>(
@@ -216,7 +241,7 @@ impl OverlayImpl {
         color: &Color,
         alpha: f32,
     ) -> Result<IDVisual, Error> {
-        Ok(3)
+        Ok(IDVisual::None)
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
