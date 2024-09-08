@@ -9,7 +9,7 @@ use crate::{
 */
 
 use x11_dl::xlib::{self, Xlib, _XDisplay, TrueColor};
-use x11_dl::xfixes;
+use x11_dl::{xfixes, xft};
 
 use std::sync::Arc;
 
@@ -22,10 +22,24 @@ impl std::fmt::Debug for ImageTexture {
 }
 
 #[derive(Clone)]
-pub struct PreparedFont {}
+pub struct PreparedFont {
+    display: *mut _XDisplay,
+    font: *mut xft::XftFont,
+}
 impl std::fmt::Debug for PreparedFont {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "PreparedFont {:?}", &self)
+    }
+}
+impl Drop for PreparedFont {
+    fn drop(&mut self){
+        unsafe {
+            let xft = xft::Xft::open();
+            if xft.is_err() {
+                return; // how can we handle this? return of drop is void.
+            }
+            let font = (xft.unwrap().XftFontClose)(self.display, self.font);
+        }
     }
 }
 
@@ -34,7 +48,9 @@ pub type IDVisual = usize;
 pub struct OverlayImpl {
     instance: Xlib,
     display: *mut _XDisplay,
+    screen: Option<i32>,
     window: Option<u64>,
+    visual_info: Option<xlib::XVisualInfo>,
 }
 unsafe impl Send for OverlayImpl{}
 
@@ -45,7 +61,13 @@ impl OverlayImpl {
         if display.is_null() {
             return Err("failed to retrieve display ptr".into());
         }
-        Ok(Self {instance, display, window:None})
+        Ok(Self {
+            instance,
+            display,
+            screen: None,
+            window: None,
+            visual_info: None,
+        })
     }
 
     pub fn create_window(&mut self, config: &OverlayConfig) -> Result<(), Error> {
@@ -100,6 +122,8 @@ impl OverlayImpl {
             (xlib_fixes.XFixesDestroyRegion)(self.display, region);
             (self.instance.XMapWindow)(self.display, window);
             self.window = Some(window);
+            self.visual_info = Some(visual_info);
+            self.screen = Some(screen);
         }
         Ok(())
     }
@@ -118,7 +142,16 @@ impl OverlayImpl {
     }
 
     pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont, Error> {
-        Ok(PreparedFont {})
+        unsafe {
+            let xft = xft::Xft::open()?;
+            let font_name = std::ffi::OsString::from(&properties.font);
+            let font_str = std::mem::transmute::<*const u8,_>(font_name.as_os_str().as_encoded_bytes().as_ptr());
+            let font = (xft.XftFontOpenName)(self.display, *self.screen.as_ref().ok_or("no screen")?, font_str);
+            Ok(PreparedFont {
+                display: self.display,
+                font,
+            })
+        }
     }
 
     pub fn draw_text(
