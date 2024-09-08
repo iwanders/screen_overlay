@@ -168,8 +168,8 @@ impl OverlayImpl {
     pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont, Error> {
         unsafe {
             let xft = xft::Xft::open()?;
-            // println!("font prop: {properties:?}");
-            let font_name = std::ffi::OsString::from(&properties.font);
+            let font_descriptor = format!("{}:pixelsize={}", properties.font, properties.size as i32);
+            let font_name = std::ffi::OsString::from(&font_descriptor);
             let font_str = std::mem::transmute::<*const u8,_>(font_name.as_os_str().as_encoded_bytes().as_ptr());
             let font = (xft.XftFontOpenName)(self.display, *self.screen.as_ref().ok_or("no screen")?, font_str);
             // println!("font prop: {font:?}");
