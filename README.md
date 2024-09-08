@@ -3,12 +3,12 @@
 A Rust crate that allows drawing click-through overlays over full screen applications:
 
 On Windows:
-- Bitmap images, support transparancy (tested with a png)
-- Text
-- Lines, circles, rectangles
+- Text.
+- Bitmap images, support transparancy (tested with a png).
+- Lines, circles, rectangles.
 
 On X11:
-- Text
+- Text (no text wrapping).
 
 Mostly intended as a library to allow me to display text as a countdown from my behaviour tree library [betula](https://github.com/iwanders/betula/).
 
