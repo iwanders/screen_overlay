@@ -264,7 +264,7 @@ impl OverlayImpl {
             let b: Vec<u8> = text
                 .as_bytes()
                 .iter()
-                .chain([0u8].iter())
+                //.chain([0u8].iter())
                 .copied()
                 .collect();
             (xft.XftDrawStringUtf8)(
