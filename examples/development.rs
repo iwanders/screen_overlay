@@ -47,6 +47,10 @@ pub fn main() -> std::result::Result<(), Error> {
             .expect("texture draw failed");
 
         for i in 0..50000 {
+            if true {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                continue;
+            }
             let pos = Rect::from(200.0 + 50.0 * (i % 5) as f32, 200.0).sized(200.0, 300.0);
             let geometry = DrawGeometry::new().rectangle(&pos);
             let color = Color {

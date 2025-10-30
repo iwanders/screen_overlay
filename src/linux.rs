@@ -59,6 +59,7 @@ impl Drop for PreparedFont {
 #[derive(Clone, Debug)]
 pub enum IDVisual {
     Text { xft_draw: *mut xft::XftDraw },
+    Image { gc: GC, display: *mut _XDisplay },
     None,
 }
 impl Drop for IDVisual {
@@ -71,6 +72,11 @@ impl Drop for IDVisual {
                         return; // how can we handle this? return of drop is void.
                     }
                     let font = (xft.unwrap().XftDrawDestroy)(*xft_draw);
+                }
+                IDVisual::Image { gc, display } => {
+                    println!("Clearing image");
+                    let instance = xlib::Xlib::open().unwrap();
+                    (instance.XFreeGC)(*display, *gc);
                 }
                 IDVisual::None => {}
             }
@@ -293,7 +299,13 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
-        let img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+        let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+
+        for (_x, _y, pixel) in img.enumerate_pixels_mut() {
+            let p = pixel.0;
+            let a = p[3];
+            (*pixel).0 = [p[2], p[1], p[0], a];
+        }
 
         let width = img.width();
         let height = img.height();
@@ -304,13 +316,15 @@ impl OverlayImpl {
 
         // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
         // Need to transfer ownership of the bytes.
-        let raw_container = img.into_raw();
+        let mut raw_container = img.into_raw();
+
         let data = raw_container.as_ptr();
         let image = unsafe {
             (self.instance.XCreateImage)(
                 self.display,
                 visual.visual,
-                visual.depth as u32,
+                //visual.depth as u32,
+                32,
                 xlib::ZPixmap,
                 0, // offset
                 data as *mut i8,
@@ -337,7 +351,29 @@ impl OverlayImpl {
         color: &Color,
         alpha: f32,
     ) -> Result<IDVisual, Error> {
-        Ok(IDVisual::None)
+        let drawable = self.window.unwrap();
+        let gc =
+            unsafe { (self.instance.XCreateGC)(self.display, drawable, 0, std::ptr::null_mut()) };
+        println!("gc: {:?}", gc);
+        // Next up is rendering the image on the gc.
+        let _ = unsafe {
+            (self.instance.XPutImage)(
+                self.display,
+                drawable,
+                gc,
+                texture.image,
+                texture_region.min.x as i32, // src
+                texture_region.min.y as i32,
+                position.x as i32, // destination, drawable.
+                position.y as i32,
+                texture_region.width() as u32,
+                texture_region.height() as u32,
+            )
+        };
+        Ok(IDVisual::Image {
+            gc,
+            display: self.display,
+        })
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
