@@ -8,16 +8,28 @@ use crate::{
     We can probably draw on https://github.com/ftorkler/x11-overlay for a lot of the logic.
 */
 
-use x11_dl::xlib::{self, TrueColor, Xlib, _XDisplay};
+use x11_dl::xlib::{self, TrueColor, XImage, Xlib, _XDisplay, GC};
 use x11_dl::{xfixes, xft, xrender};
 
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct ImageTexture {}
+pub struct ImageTexture {
+    image: *mut XImage,
+}
 impl std::fmt::Debug for ImageTexture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "ImageTexture {:?}", &self)
+    }
+}
+impl Drop for ImageTexture {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.image.is_null() {
+                let instance = xlib::Xlib::open().unwrap();
+                (instance.XDestroyImage)(self.image);
+            }
+        }
     }
 }
 
@@ -260,13 +272,7 @@ impl OverlayImpl {
             // XftDrawStringUtf8(xftDraw, &xftColor, xftFont, x, y + xftFont->ascent, (const FcChar8*)text.c_str(), text.size());
             let x = layout.min.x as i32;
             let y = layout.min.y as i32 + (*(font.font)).ascent;
-            // println!("x: {x}, y: {y}");
-            let b: Vec<u8> = text
-                .as_bytes()
-                .iter()
-                //.chain([0u8].iter())
-                .copied()
-                .collect();
+            let b: Vec<u8> = text.as_bytes().iter().copied().collect();
             (xft.XftDrawStringUtf8)(
                 xft_draw,
                 &xft_color,
@@ -287,7 +293,40 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
-        Ok(ImageTexture {})
+        let img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+
+        let width = img.width();
+        let height = img.height();
+        let visual = self
+            .visual_info
+            .as_ref()
+            .ok_or("visual info not available")?;
+
+        // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
+        // Need to transfer ownership of the bytes.
+        let raw_container = img.into_raw();
+        let data = raw_container.as_ptr();
+        let image = unsafe {
+            (self.instance.XCreateImage)(
+                self.display,
+                visual.visual,
+                visual.depth as u32,
+                xlib::ZPixmap,
+                0, // offset
+                data as *mut i8,
+                width as u32,
+                height as u32,
+                32,                 // bitmap pad
+                (width * 4) as i32, // bytes per line
+            )
+        };
+        if image.is_null() {
+            return Err("image creation failed".into());
+        }
+        // Image creation succeeded, leak the data because the X11 image owns it now and will clean it up on drop.
+        raw_container.leak();
+
+        Ok(ImageTexture { image })
     }
 
     pub fn draw_texture(

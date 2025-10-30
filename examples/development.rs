@@ -46,19 +46,6 @@ pub fn main() -> std::result::Result<(), Error> {
             )
             .expect("texture draw failed");
 
-        let image = twindow
-            .load_texture(std::path::PathBuf::from("image.jpg"))
-            .expect("failed to load image");
-        let _t = twindow
-            .draw_texture(
-                &Point::new(1000.0, 500.0),
-                &image,
-                &Rect::from(0.0, 0.0).sized(200.0, 200.0),
-                &Color::TRANSPARENT,
-                alpha,
-            )
-            .expect("texture draw failed");
-
         for i in 0..50000 {
             let pos = Rect::from(200.0 + 50.0 * (i % 5) as f32, 200.0).sized(200.0, 300.0);
             let geometry = DrawGeometry::new().rectangle(&pos);
