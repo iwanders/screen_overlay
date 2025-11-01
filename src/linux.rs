@@ -153,6 +153,7 @@ pub struct OverlayImpl {
     screen: Option<i32>,
     window: Option<u64>,
     visual_info: Option<xlib::XVisualInfo>,
+    gc: Option<GC>,
 }
 unsafe impl Send for OverlayImpl {}
 
@@ -177,6 +178,7 @@ impl OverlayImpl {
             window: None,
             visual_info: None,
             default_visual: None,
+            gc: None,
         })
     }
 
@@ -309,10 +311,12 @@ impl OverlayImpl {
             );
             (self.instance.XMapWindow)(self.display, window);
 
+            let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
             self.window = Some(window);
             self.visual_info = Some(visual_info);
             self.screen = Some(screen);
             self.default_visual = Some(default_visual);
+            self.gc = Some(gc);
         }
         Ok(())
     }
@@ -420,11 +424,6 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
-        return Ok(ImageTexture {
-            pm: 0,
-            display: self.display,
-        });
-
         // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
 
@@ -437,22 +436,26 @@ impl OverlayImpl {
 
         let width = img.width();
         let height = img.height();
-        let visual = self
-            .visual_info
-            .as_ref()
-            .ok_or("visual info not available")?;
-        let default_vis = *self.default_visual.as_ref().unwrap();
+
+        let visual = *self.visual_info.as_ref().unwrap();
 
         // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
         // Need to transfer ownership of the bytes.
         let mut raw_container = img.into_raw();
+        for i in 0..raw_container.len() / 4 {
+            // raw_container[i * 4] = 0;
+            // raw_container[i * 4 + 1] = 0;
+            // raw_container[i * 4 + 2] = 0;
+            // raw_container[i * 4 + 3] = 255;
+        }
 
         let data = raw_container.as_ptr();
-        let root = unsafe { (self.instance.XRootWindow)(self.display, self.screen.unwrap()) };
+
+        let window = self.window.unwrap();
         let image = unsafe {
             (self.instance.XCreateImage)(
                 self.display,
-                default_vis,
+                visual.visual,
                 //visual.depth as u32,
                 32,
                 xlib::ZPixmap,
@@ -472,7 +475,7 @@ impl OverlayImpl {
         let pm = unsafe {
             (self.instance.XCreatePixmap)(
                 self.display,
-                root, // only used for depth properties.
+                window, // only used for depth properties.
                 width as u32,
                 height as u32,
                 32, // bitmap pad
@@ -483,7 +486,8 @@ impl OverlayImpl {
             return Err("image creation failed".into());
         }
         let drawable = self.window.unwrap();
-        let gc = unsafe { (self.instance.XCreateGC)(self.display, pm, 0, std::ptr::null_mut()) };
+
+        let gc = self.gc.unwrap();
 
         unsafe { (self.instance.XFlush)(self.display) };
         let _ = unsafe {
@@ -521,8 +525,8 @@ impl OverlayImpl {
         alpha: f32,
     ) -> Result<IDVisual, Error> {
         let drawable = self.window.unwrap();
-        let gc =
-            unsafe { (self.instance.XCreateGC)(self.display, drawable, 0, std::ptr::null_mut()) };
+        let gc = self.gc.unwrap();
+
         println!("gc: {:?}", gc);
 
         // Do we first have to create an XRenderCreatePicture?
@@ -572,7 +576,7 @@ impl OverlayImpl {
                   unsigned int	    height)*/
             let mut render_color: xrender::XRenderColor =
                 std::mem::MaybeUninit::zeroed().assume_init();
-            let r = 0; // This rectangle works.
+            let r = 255; // This rectangle works.
             let g = 0;
             let b = 0;
             let alpha = 255;
@@ -583,27 +587,25 @@ impl OverlayImpl {
             (self.xrender.XRenderFillRectangle)(
                 self.display,
                 xrender::PictOpSrc, // is this just assign?
-                wp,                 // writing to wp here fails.
+                p,                  // writing to wp here fails.
                 &render_color,
                 0,
                 0,
-                30,
-                30,
+                10,
+                10,
             );
             render_color.blue = 255 * 257;
             render_color.alpha = 128 * 257;
             (self.xrender.XRenderFillRectangle)(
                 self.display,
                 xrender::PictOpSrc, // is this just assign?
-                wp,
+                p,
                 &render_color,
                 30,
                 0,
-                30,
-                30,
+                20,
+                20,
             );
-
-            (self.xrender.XRenderFreePicture)(self.display, wp);
 
             // Next up is rendering the image on the gc.
             //
@@ -620,7 +622,7 @@ impl OverlayImpl {
             // int	    dst_y,
             // unsigned int	width,
             // unsigned int	height)
-            /*
+
             unsafe {
                 (self.xrender.XRenderComposite)(
                     self.display,
@@ -638,7 +640,8 @@ impl OverlayImpl {
                     texture_region.width() as u32,
                     texture_region.height() as u32,
                 );
-            }*/
+            } /**/
+            (self.xrender.XRenderFreePicture)(self.display, wp);
             unsafe { (self.instance.XFlush)(self.display) };
         }
 
