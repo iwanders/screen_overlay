@@ -215,7 +215,15 @@ impl OverlayImpl {
                 return Err("failed to retrieve visual info".into());
             }
             let visual_info = visual_info.assume_init();
-            // println!("visual_info: {visual_info:?}");
+
+            // Verifying that we have direct alpha blending and pict type direct;
+            let fmt = (self.xrender.XRenderFindVisualFormat)(self.display, visual_info.visual);
+            if (*fmt).type_ != xrender::PictTypeDirect || (*fmt).direct.alpha == 0 {
+                return Err("could not fing rgba visual".into());
+            }
+            if visual_info.depth != 32 {
+                return Err("visual depth is not 32 ".into());
+            }
 
             let mut attributes: xlib::XSetWindowAttributes =
                 std::mem::MaybeUninit::zeroed().assume_init();
@@ -227,12 +235,14 @@ impl OverlayImpl {
             );
             attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
             attributes.background_pixel = (self.instance.XBlackPixel)(self.display, screen);
-
             attributes.override_redirect = true as i32;
+            attributes.event_mask = xlib::ExposureMask;
+
             let attr_mask = xlib::CWColormap
                 | xlib::CWBorderPixel
                 | xlib::CWBackPixel
-                | xlib::CWOverrideRedirect;
+                | xlib::CWOverrideRedirect
+                | xlib::CWEventMask;
 
             let x = 0;
             let y = 0;
@@ -240,8 +250,8 @@ impl OverlayImpl {
             let window = (self.instance.XCreateWindow)(
                 self.display,
                 root_window,
-                0,
-                0,
+                x,
+                y,
                 root_width as _,
                 root_height as _,
                 0,
@@ -254,6 +264,7 @@ impl OverlayImpl {
             if window == 0 {
                 return Err("failed to create window".into());
             }
+            // This sets the input region to zero.
             // println!("window: {window:?}");
             let xlib_fixes = xfixes::Xlib::open()?;
             let region = (xlib_fixes.XFixesCreateRegion)(self.display, std::ptr::null_mut(), 0);
@@ -262,7 +273,42 @@ impl OverlayImpl {
             const ShapeInput: i32 = 2;
             (xlib_fixes.XFixesSetWindowShapeRegion)(self.display, window, ShapeInput, 0, 0, region);
             (xlib_fixes.XFixesDestroyRegion)(self.display, region);
+
+            // Are these XChangeProperties necessary??
+            let net_wm_state =
+                (self.instance.XInternAtom)(self.display, "_NET_WM_STATE".as_ptr() as *const i8, 0);
+            let wm_state_above = (self.instance.XInternAtom)(
+                self.display,
+                b"_NET_WM_STATE_ABOVE".as_ptr() as *const i8,
+                0,
+            );
+            let wm_on_top = (self.instance.XInternAtom)(
+                self.display,
+                b"_NET_WM_STATE_STAYS_ON_TOP".as_ptr() as *const i8,
+                0,
+            );
+            (self.instance.XChangeProperty)(
+                self.display,
+                window,
+                net_wm_state,
+                xlib::XA_ATOM,
+                32,
+                xlib::PropModeReplace,
+                (&wm_state_above as *const u64) as *const u8,
+                1,
+            );
+            (self.instance.XChangeProperty)(
+                self.display,
+                window,
+                wm_on_top,
+                xlib::XA_ATOM,
+                32,
+                xlib::PropModeReplace,
+                (&wm_state_above as *const u64) as *const u8,
+                1,
+            );
             (self.instance.XMapWindow)(self.display, window);
+
             self.window = Some(window);
             self.visual_info = Some(visual_info);
             self.screen = Some(screen);
@@ -374,6 +420,11 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
+        return Ok(ImageTexture {
+            pm: 0,
+            display: self.display,
+        });
+
         // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
 
@@ -521,18 +572,18 @@ impl OverlayImpl {
                   unsigned int	    height)*/
             let mut render_color: xrender::XRenderColor =
                 std::mem::MaybeUninit::zeroed().assume_init();
-            let r = 255; // This rectangle works.
+            let r = 0; // This rectangle works.
             let g = 0;
             let b = 0;
-            let alpha = 30;
+            let alpha = 255;
             render_color.red = (r & 0xFF) * 257; // 8bit to 16bit
             render_color.green = (g & 0xFF) * 257;
             render_color.blue = (b & 0xFF) * 257;
-            render_color.alpha = alpha;
+            render_color.alpha = alpha * 257;
             (self.xrender.XRenderFillRectangle)(
                 self.display,
                 xrender::PictOpSrc, // is this just assign?
-                p,                  // writing to wp here fails.
+                wp,                 // writing to wp here fails.
                 &render_color,
                 0,
                 0,
@@ -540,16 +591,19 @@ impl OverlayImpl {
                 30,
             );
             render_color.blue = 255 * 257;
+            render_color.alpha = 128 * 257;
             (self.xrender.XRenderFillRectangle)(
                 self.display,
                 xrender::PictOpSrc, // is this just assign?
-                p,
+                wp,
                 &render_color,
                 30,
                 0,
                 30,
                 30,
             );
+
+            (self.xrender.XRenderFreePicture)(self.display, wp);
 
             // Next up is rendering the image on the gc.
             //
@@ -566,6 +620,7 @@ impl OverlayImpl {
             // int	    dst_y,
             // unsigned int	width,
             // unsigned int	height)
+            /*
             unsafe {
                 (self.xrender.XRenderComposite)(
                     self.display,
@@ -583,7 +638,7 @@ impl OverlayImpl {
                     texture_region.width() as u32,
                     texture_region.height() as u32,
                 );
-            }
+            }*/
             unsafe { (self.instance.XFlush)(self.display) };
         }
 
