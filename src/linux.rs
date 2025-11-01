@@ -17,7 +17,7 @@ use crate::{
  and rendering.
 */
 
-use x11_dl::xlib::{self, Display, Pixmap, TrueColor, XErrorEvent, XImage, Xlib, GC};
+use x11_dl::xlib::{self, Display, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib, GC};
 use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
 
 use std::sync::Arc;
@@ -136,10 +136,20 @@ impl Drop for IDVisual {
     }
 }
 
+#[macro_export]
+macro_rules! xflush {
+    ($self:expr) => {
+        unsafe {
+            ($self.instance.XFlush)($self.display);
+        }
+    };
+}
+
 pub struct OverlayImpl {
     instance: Xlib,
     xrender: Xrender,
     display: *mut Display,
+    default_visual: Option<*mut Visual>,
     screen: Option<i32>,
     window: Option<u64>,
     visual_info: Option<xlib::XVisualInfo>,
@@ -166,6 +176,7 @@ impl OverlayImpl {
             screen: None,
             window: None,
             visual_info: None,
+            default_visual: None,
         })
     }
 
@@ -173,6 +184,7 @@ impl OverlayImpl {
         unsafe {
             let screen = (self.instance.XDefaultScreen)(self.display);
             let root_window = (self.instance.XDefaultRootWindow)(self.display);
+            let default_visual = (self.instance.XDefaultVisual)(self.display, screen);
             // println!("Screen: {screen:?}");
             // println!("root_window: {root_window:?}");
 
@@ -251,6 +263,7 @@ impl OverlayImpl {
             self.window = Some(window);
             self.visual_info = Some(visual_info);
             self.screen = Some(screen);
+            self.default_visual = Some(default_visual);
         }
         Ok(())
     }
@@ -349,7 +362,6 @@ impl OverlayImpl {
                 b.len() as i32,
             );
 
-            (self.instance.XFlush)(self.display);
             // XftDrawDestroy XftColorFree!
             Ok(IDVisual::Text { xft_draw })
         }
@@ -365,7 +377,8 @@ impl OverlayImpl {
         for (_x, _y, pixel) in img.enumerate_pixels_mut() {
             let p = pixel.0;
             let a = p[3];
-            (*pixel).0 = [p[2], p[1], p[0], a];
+            // (*pixel).0 = [p[2], p[1], p[0], a];
+            (*pixel).0 = [a, p[0], p[1], p[2]];
         }
 
         let width = img.width();
@@ -374,16 +387,18 @@ impl OverlayImpl {
             .visual_info
             .as_ref()
             .ok_or("visual info not available")?;
+        let default_vis = *self.default_visual.as_ref().unwrap();
 
         // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
         // Need to transfer ownership of the bytes.
         let mut raw_container = img.into_raw();
 
         let data = raw_container.as_ptr();
+        let root = unsafe { (self.instance.XRootWindow)(self.display, self.screen.unwrap()) };
         let image = unsafe {
             (self.instance.XCreateImage)(
                 self.display,
-                visual.visual,
+                default_vis,
                 //visual.depth as u32,
                 32,
                 xlib::ZPixmap,
@@ -391,8 +406,8 @@ impl OverlayImpl {
                 data as *mut i8,
                 width as u32,
                 height as u32,
-                32,                 // bitmap pad
-                (width * 4) as i32, // bytes per line
+                32,               // bitmap pad
+                (width * 4) as _, // bytes per line
             )
         };
         if image.is_null() {
@@ -403,20 +418,20 @@ impl OverlayImpl {
         let pm = unsafe {
             (self.instance.XCreatePixmap)(
                 self.display,
-                visual.visualid, // only used for depth properties.
+                root, // only used for depth properties.
                 width as u32,
                 height as u32,
                 32, // bitmap pad
             )
         };
-
+        unsafe { (self.instance.XFlush)(self.display) };
         if pm == 0 {
             return Err("image creation failed".into());
         }
         let drawable = self.window.unwrap();
-        let gc =
-            unsafe { (self.instance.XCreateGC)(self.display, drawable, 0, std::ptr::null_mut()) };
+        let gc = unsafe { (self.instance.XCreateGC)(self.display, pm, 0, std::ptr::null_mut()) };
 
+        unsafe { (self.instance.XFlush)(self.display) };
         let _ = unsafe {
             (self.instance.XPutImage)(
                 self.display,
@@ -431,6 +446,7 @@ impl OverlayImpl {
                 height as u32,
             )
         };
+        unsafe { (self.instance.XFlush)(self.display) };
 
         // Image creation succeeded, leak the data because the X11 image owns it now and will clean it up on drop.
         raw_container.leak();
@@ -457,15 +473,65 @@ impl OverlayImpl {
         // Do we first have to create an XRenderCreatePicture?
         //
         unsafe {
+            let d = *self.window.as_ref().unwrap();
+            println!("before find standard");
             let fmt =
                 (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardARGB32);
-            println!("below standard format; {:?}", fmt);
+
+            let fmtrgb =
+                (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardRGB24);
+            let window_fmt = (self.xrender.XRenderFindVisualFormat)(
+                self.display,
+                (self.instance.XDefaultVisual)(self.display, self.screen.unwrap()),
+            );
+            println!("below standard format; fmt {:?}", fmt);
+            println!("below standard format; window_fmt {:?}", window_fmt);
+            println!("below standard format; fmtrgb {:?}", fmtrgb);
             let p = (self.xrender.XRenderCreatePicture)(
                 self.display,
                 texture.pm,
                 fmt,
                 0,
                 std::ptr::null(),
+            );
+
+            let wp = (self.xrender.XRenderCreatePicture)(
+                self.display,
+                self.window.unwrap(),
+                fmt,
+                0,
+                std::ptr::null(),
+            );
+            unsafe { (self.instance.XFlush)(self.display) };
+
+            /*
+            XRenderFillRectangle (Display		    *dpy,
+                  int		    op,
+                  Picture		    dst,
+                  _Xconst XRenderColor  *color,
+                  int		    x,
+                  int		    y,
+                  unsigned int	    width,
+                  unsigned int	    height)*/
+            let mut render_color: xrender::XRenderColor =
+                std::mem::MaybeUninit::zeroed().assume_init();
+            let r = 128; // This rectangle works.
+            let g = 0;
+            let b = 0;
+            let alpha = 128;
+            render_color.red = (r & 0xFF) * 257; // 8bit to 16bit
+            render_color.green = (g & 0xFF) * 257;
+            render_color.blue = b * 257;
+            render_color.alpha = alpha;
+            (self.xrender.XRenderFillRectangle)(
+                self.display,
+                xrender::PictOpSrc, // is this just assign?
+                wp,
+                &render_color,
+                0,
+                0,
+                30,
+                30,
             );
 
             // Next up is rendering the image on the gc.
@@ -483,24 +549,25 @@ impl OverlayImpl {
             // int	    dst_y,
             // unsigned int	width,
             // unsigned int	height)
-            let d = *self.window.as_ref().unwrap();
             unsafe {
                 (self.xrender.XRenderComposite)(
                     self.display,
-                    xrender::PictOpSrc as i32,
-                    p,
-                    0,
-                    d,
-                    0,
-                    0,
-                    0,
+                    // xrender::PictOpOver as i32,
+                    xrender::PictOpOver as i32,
+                    p,  // src
+                    0,  // mask
+                    wp, // dest
                     0,
                     0,
                     0,
-                    10,
-                    10,
+                    0,
+                    0,
+                    0,
+                    texture_region.width() as u32,
+                    texture_region.height() as u32,
                 );
             }
+            unsafe { (self.instance.XFlush)(self.display) };
         }
 
         Ok(IDVisual::Image {
