@@ -148,6 +148,7 @@ macro_rules! xflush {
 pub struct OverlayImpl {
     instance: Xlib,
     xrender: Xrender,
+    glx: x11_dl::glx::Glx,
     display: *mut Display,
     default_visual: Option<*mut Visual>,
     screen: Option<i32>,
@@ -161,6 +162,7 @@ impl OverlayImpl {
     pub fn new() -> Result<Self, Error> {
         let instance = xlib::Xlib::open()?;
         let xrender = xrender::Xrender::open()?;
+        let glx = x11_dl::glx::Glx::open()?;
         let display = unsafe { (instance.XOpenDisplay)(std::ptr::null()) };
         if display.is_null() {
             return Err("failed to retrieve display ptr".into());
@@ -173,6 +175,7 @@ impl OverlayImpl {
         Ok(Self {
             instance,
             xrender,
+            glx,
             display,
             screen: None,
             window: None,
@@ -227,12 +230,31 @@ impl OverlayImpl {
                 return Err("visual depth is not 32 ".into());
             }
 
+            let mut att = [
+                // x11_dl::glx::GLX_USE_GL,
+                x11_dl::glx::GLX_RGBA,
+                // x11_dl::glx::GLX_LEVEL,
+                // 1,
+                // 0,
+                // x11_dl::glx::GLX_DEPTH_SIZE,
+                // 24,
+                x11_dl::glx::GLX_DOUBLEBUFFER,
+                x11_dl::glx::GLX_DEPTH_SIZE,
+                24,
+                // x11_dl::glx::GLX_NONE,
+                0,
+            ];
+            let visuals = unsafe { (self.glx.glXChooseVisual)(self.display, 0, att.as_mut_ptr()) };
+            println!("visuals: {:?}", visuals);
+            println!("visuals: {:?}", (*visuals));
+            println!("visuals.visual: {:?}", (*visuals).visual);
+
             let mut attributes: xlib::XSetWindowAttributes =
                 std::mem::MaybeUninit::zeroed().assume_init();
             attributes.colormap = (self.instance.XCreateColormap)(
                 self.display,
                 root_window,
-                visual_info.visual,
+                (*visuals).visual,
                 xlib::AllocNone,
             );
             attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
@@ -254,18 +276,37 @@ impl OverlayImpl {
                 root_window,
                 x,
                 y,
-                root_width as _,
-                root_height as _,
-                0,
-                visual_info.depth,
+                // root_width as _,
+                100,
+                // root_height as _,
+                100,
+                0, // border width
+                (*visuals).depth,
                 xlib::InputOutput as _,
-                visual_info.visual,
+                (*visuals).visual,
                 attr_mask,
                 &mut attributes,
             );
+            unsafe { (self.instance.XFlush)(self.display) };
             if window == 0 {
                 return Err("failed to create window".into());
             }
+            (self.instance.XMapWindow)(self.display, window);
+
+            // Now we have a window, we need to make the glx context.
+            //
+            //
+
+            let context = (self.glx.glXCreateContext)(
+                self.display,
+                visuals,
+                std::ptr::null_mut(),
+                true as i32,
+            );
+            (self.glx.glXMakeCurrent)(self.display, window, context);
+            /**/
+
+            unsafe { (self.instance.XFlush)(self.display) };
             // This sets the input region to zero.
             // println!("window: {window:?}");
             let xlib_fixes = xfixes::Xlib::open()?;
@@ -309,7 +350,10 @@ impl OverlayImpl {
                 (&wm_state_above as *const u64) as *const u8,
                 1,
             );
-            (self.instance.XMapWindow)(self.display, window);
+
+            /*
+            let gl = unsafe { GlFns::load_from(&|p| SDL_GL_GetProcAddress(p) as _).unwrap() };
+            */
 
             let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
             self.window = Some(window);
@@ -424,8 +468,13 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
+        return Ok(ImageTexture {
+            pm: 0,
+            display: self.display,
+        });
         // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+        img.save("/tmp/foo.png").unwrap();
 
         for (_x, _y, pixel) in img.enumerate_pixels_mut() {
             let p = pixel.0;

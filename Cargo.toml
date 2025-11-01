@@ -47,3 +47,4 @@ features = [
 
 [target.'cfg(any(target_os = "linux"))'.dependencies]
 x11-dl = "2.21"
+
