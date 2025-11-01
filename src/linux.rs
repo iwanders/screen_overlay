@@ -227,13 +227,16 @@ impl OverlayImpl {
             );
             attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
             attributes.background_pixel = (self.instance.XBlackPixel)(self.display, screen);
+
             attributes.override_redirect = true as i32;
             let attr_mask = xlib::CWColormap
                 | xlib::CWBorderPixel
                 | xlib::CWBackPixel
                 | xlib::CWOverrideRedirect;
+
             let x = 0;
             let y = 0;
+
             let window = (self.instance.XCreateWindow)(
                 self.display,
                 root_window,
@@ -446,6 +449,7 @@ impl OverlayImpl {
                 height as u32,
             )
         };
+
         unsafe { (self.instance.XFlush)(self.display) };
 
         // Image creation succeeded, leak the data because the X11 image owns it now and will clean it up on drop.
@@ -477,20 +481,22 @@ impl OverlayImpl {
             println!("before find standard");
             let fmt =
                 (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardARGB32);
-
+            let visual = self.visual_info.as_ref().unwrap();
             let fmtrgb =
                 (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardRGB24);
             let window_fmt = (self.xrender.XRenderFindVisualFormat)(
                 self.display,
                 (self.instance.XDefaultVisual)(self.display, self.screen.unwrap()),
             );
-            println!("below standard format; fmt {:?}", fmt);
+            println!("below standard format; XDefaultVisual {:?}", window_fmt);
+            let window_fmt = (self.xrender.XRenderFindVisualFormat)(self.display, visual.visual);
+            println!("below standard XRenderFindVisualFormat; fmt {:?}", fmt);
             println!("below standard format; window_fmt {:?}", window_fmt);
             println!("below standard format; fmtrgb {:?}", fmtrgb);
             let p = (self.xrender.XRenderCreatePicture)(
                 self.display,
                 texture.pm,
-                fmt,
+                window_fmt,
                 0,
                 std::ptr::null(),
             );
@@ -498,7 +504,7 @@ impl OverlayImpl {
             let wp = (self.xrender.XRenderCreatePicture)(
                 self.display,
                 self.window.unwrap(),
-                fmt,
+                window_fmt,
                 0,
                 std::ptr::null(),
             );
@@ -515,20 +521,31 @@ impl OverlayImpl {
                   unsigned int	    height)*/
             let mut render_color: xrender::XRenderColor =
                 std::mem::MaybeUninit::zeroed().assume_init();
-            let r = 128; // This rectangle works.
+            let r = 255; // This rectangle works.
             let g = 0;
             let b = 0;
-            let alpha = 128;
+            let alpha = 30;
             render_color.red = (r & 0xFF) * 257; // 8bit to 16bit
             render_color.green = (g & 0xFF) * 257;
-            render_color.blue = b * 257;
+            render_color.blue = (b & 0xFF) * 257;
             render_color.alpha = alpha;
             (self.xrender.XRenderFillRectangle)(
                 self.display,
                 xrender::PictOpSrc, // is this just assign?
-                wp,
+                p,                  // writing to wp here fails.
                 &render_color,
                 0,
+                0,
+                30,
+                30,
+            );
+            render_color.blue = 255 * 257;
+            (self.xrender.XRenderFillRectangle)(
+                self.display,
+                xrender::PictOpSrc, // is this just assign?
+                p,
+                &render_color,
+                30,
                 0,
                 30,
                 30,
@@ -553,7 +570,7 @@ impl OverlayImpl {
                 (self.xrender.XRenderComposite)(
                     self.display,
                     // xrender::PictOpOver as i32,
-                    xrender::PictOpOver as i32,
+                    xrender::PictOpSrc as i32,
                     p,  // src
                     0,  // mask
                     wp, // dest
