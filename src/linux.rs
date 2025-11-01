@@ -189,124 +189,79 @@ impl OverlayImpl {
         unsafe {
             let screen = (self.instance.XDefaultScreen)(self.display);
             let root_window = (self.instance.XDefaultRootWindow)(self.display);
-            let default_visual = (self.instance.XDefaultVisual)(self.display, screen);
-            // println!("Screen: {screen:?}");
-            // println!("root_window: {root_window:?}");
-
-            let mut attributes: xlib::XWindowAttributes =
-                std::mem::MaybeUninit::zeroed().assume_init();
-            let status =
-                (self.instance.XGetWindowAttributes)(self.display, root_window, &mut attributes);
-            if status != 1 {
-                return Err("failed to retrieve root window attributes".into());
-            }
-            // println!("attributes: {attributes:?}");
-            let root_width = attributes.width;
-            let root_height = attributes.height;
-
-            let mut visual_info = std::mem::MaybeUninit::<xlib::XVisualInfo>::uninit();
-
-            let status = (self.instance.XMatchVisualInfo)(
-                self.display as _,
-                screen as i32,
-                32,
-                xlib::TrueColor,
-                visual_info.as_mut_ptr(),
-            );
-            // https://tronche.com/gui/x/xlib/utilities/XMatchVisualInfo.html:
-            // If a visual is found, XMatchVisualInfo() returns nonzero and the information on the visual to vinfo_return.
-            // yet that seems not to be the case, it clearly returns 0 on errors.
-            if status == 0 {
-                return Err("failed to retrieve visual info".into());
-            }
-            let visual_info = visual_info.assume_init();
-
-            // Verifying that we have direct alpha blending and pict type direct;
-            let fmt = (self.xrender.XRenderFindVisualFormat)(self.display, visual_info.visual);
-            if (*fmt).type_ != xrender::PictTypeDirect || (*fmt).direct.alpha == 0 {
-                return Err("could not fing rgba visual".into());
-            }
-            if visual_info.depth != 32 {
-                return Err("visual depth is not 32 ".into());
-            }
-
-            let mut att = [
-                // x11_dl::glx::GLX_USE_GL,
-                x11_dl::glx::GLX_RGBA,
-                // x11_dl::glx::GLX_LEVEL,
-                // 1,
-                // 0,
-                // x11_dl::glx::GLX_DEPTH_SIZE,
-                // 24,
-                x11_dl::glx::GLX_DOUBLEBUFFER,
-                x11_dl::glx::GLX_DEPTH_SIZE,
-                24,
-                // x11_dl::glx::GLX_NONE,
-                0,
-            ];
-            let visuals = unsafe { (self.glx.glXChooseVisual)(self.display, 0, att.as_mut_ptr()) };
-            println!("visuals: {:?}", visuals);
-            println!("visuals: {:?}", (*visuals));
-            println!("visuals.visual: {:?}", (*visuals).visual);
-
-            let mut attributes: xlib::XSetWindowAttributes =
-                std::mem::MaybeUninit::zeroed().assume_init();
-            attributes.colormap = (self.instance.XCreateColormap)(
-                self.display,
-                root_window,
-                (*visuals).visual,
-                xlib::AllocNone,
-            );
-            attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
-            attributes.background_pixel = (self.instance.XBlackPixel)(self.display, screen);
-            attributes.override_redirect = true as i32;
-            attributes.event_mask = xlib::ExposureMask;
-
-            let attr_mask = xlib::CWColormap
-                | xlib::CWBorderPixel
-                | xlib::CWBackPixel
-                | xlib::CWOverrideRedirect
-                | xlib::CWEventMask;
 
             let x = 0;
             let y = 0;
 
-            let window = (self.instance.XCreateWindow)(
+            use glfw::fail_on_errors;
+            let mut glfw = glfw::init(fail_on_errors!()).unwrap();
+
+            extern crate glfw;
+            use glfw::{Action, Context, Key};
+            glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
+            glfw.window_hint(glfw::WindowHint::OpenGlProfile(
+                glfw::OpenGlProfileHint::Core,
+            ));
+            glfw.window_hint(glfw::WindowHint::Decorated(false));
+            glfw.window_hint(glfw::WindowHint::FocusOnShow(false));
+            glfw.window_hint(glfw::WindowHint::AlphaBits(Some(8)));
+            glfw.window_hint(glfw::WindowHint::DepthBits(Some(24)));
+            glfw.window_hint(glfw::WindowHint::RedBits(Some(8)));
+            glfw.window_hint(glfw::WindowHint::GreenBits(Some(8)));
+            glfw.window_hint(glfw::WindowHint::BlueBits(Some(8)));
+            glfw.window_hint(glfw::WindowHint::TransparentFramebuffer(true));
+
+            #[cfg(target_os = "macos")]
+            glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
+            // Create a windowed mode window and its OpenGL context
+            let (mut window, events) = glfw
+                .create_window(300, 300, "Hello this is window", glfw::WindowMode::Windowed)
+                .expect("Failed to create GLFW window.");
+
+            let xwindow = window.get_x11_window() as u64;
+            let glxwindow = window.get_glx_context();
+            // int XChangeWindowAttributes(Display *display, Window w, unsigned long valuemask, XSetWindowAttributes *attributes);
+            // set override direct
+            //
+
+            let mut z: xlib::XWindowAttributes = std::mem::MaybeUninit::zeroed().assume_init();
+
+            let mut attributes: xlib::XSetWindowAttributes =
+                std::mem::MaybeUninit::zeroed().assume_init();
+            /*
+            let w = (self.instance.XGetWindowAttributes)(self.display, window, &mut z);
+            attributes.colormap = (self.instance.XCreateColormap)(
                 self.display,
                 root_window,
-                x,
-                y,
-                // root_width as _,
-                100,
-                // root_height as _,
-                100,
-                0, // border width
-                (*visuals).depth,
-                xlib::InputOutput as _,
-                (*visuals).visual,
+                z.visual,
+                xlib::AllocNone,
+            );
+            attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
+            attributes.background_pixel = (self.instance.XBlackPixel)(self.display, screen);
+            */
+            attributes.override_redirect = true as i32;
+            //attributes.event_mask = xlib::ExposureMask;
+
+            (self.instance.XUnmapWindow)(self.display, xwindow);
+            let attr_mask = xlib::CWOverrideRedirect;
+            (self.instance.XChangeWindowAttributes)(
+                self.display,
+                xwindow,
                 attr_mask,
                 &mut attributes,
             );
+
+            window.make_current();
+            window.set_key_polling(false);
+            window.set_framebuffer_size_polling(true);
+            let mut realwindow = window;
+            let window = xwindow;
+            gl::load_with(|s| glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void);
+
+            (self.instance.XMapWindow)(self.display, xwindow);
+            (self.instance.XRaiseWindow)(self.display, xwindow);
             unsafe { (self.instance.XFlush)(self.display) };
-            if window == 0 {
-                return Err("failed to create window".into());
-            }
-            (self.instance.XMapWindow)(self.display, window);
 
-            // Now we have a window, we need to make the glx context.
-            //
-            //
-
-            let context = (self.glx.glXCreateContext)(
-                self.display,
-                visuals,
-                std::ptr::null_mut(),
-                true as i32,
-            );
-            (self.glx.glXMakeCurrent)(self.display, window, context);
-            /**/
-
-            unsafe { (self.instance.XFlush)(self.display) };
             // This sets the input region to zero.
             // println!("window: {window:?}");
             let xlib_fixes = xfixes::Xlib::open()?;
@@ -351,15 +306,71 @@ impl OverlayImpl {
                 1,
             );
 
+            let wm_hints = (self.instance.XInternAtom)(
+                self.display,
+                b"_MOTIF_WM_HINTS".as_ptr() as *const i8,
+                0,
+            );
+
+            (self.instance.XMapWindow)(self.display, xwindow);
             /*
             let gl = unsafe { GlFns::load_from(&|p| SDL_GL_GetProcAddress(p) as _).unwrap() };
             */
 
+            unsafe {
+                //gl::Viewport(0, 0, 100, 100);
+                //gl::ClearColor(0.2, 0.3, 0.3, 0.2);
+                //gl::Clear(gl::COLOR_BUFFER_BIT);
+                let mut texture = 3;
+                gl::GenTextures(1, &mut texture);
+                gl::BindTexture(gl::TEXTURE_2D, texture);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGBA as i32,
+                    10,
+                    10,
+                    0,
+                    gl::RGBA as u32,
+                    gl::UNSIGNED_BYTE,
+                    std::ptr::null_mut(),
+                );
+            }
+
+            while !realwindow.should_close() {
+                // events
+                // -----
+                // process_events(&mut window, &events);
+
+                // render
+                // ------
+                unsafe {
+                    gl::Viewport(0, 0, 100, 100);
+
+                    gl::Enable(gl::BLEND);
+                    gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                    gl::ClearColor(0.0, 0.3, 0.3, 0.5);
+                    gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+
+                    // draw our first triangle
+                    // gl::UseProgram(shaderProgram);
+                    // gl::BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+                    gl::DrawArrays(gl::TRIANGLES, 0, 3);
+                    // glBindVertexArray(0); // no need to unbind it every time
+                }
+
+                // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+                // -------------------------------------------------------------------------------
+                realwindow.swap_buffers();
+                //(self.glx.glXSwapBuffers)(self.display, glxwindow as u64);
+                glfw.poll_events();
+            }
+
             let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
             self.window = Some(window);
-            self.visual_info = Some(visual_info);
+            // self.visual_info = Some(visual_info);
             self.screen = Some(screen);
-            self.default_visual = Some(default_visual);
+            // self.default_visual = Some(default_visual);
             self.gc = Some(gc);
         }
         Ok(())
@@ -575,6 +586,10 @@ impl OverlayImpl {
     ) -> Result<IDVisual, Error> {
         let drawable = self.window.unwrap();
         let gc = self.gc.unwrap();
+        return Ok(IDVisual::Image {
+            gc,
+            display: self.display,
+        });
 
         println!("gc: {:?}", gc);
 
