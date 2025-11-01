@@ -8,6 +8,15 @@ use crate::{
     We can probably draw on https://github.com/ftorkler/x11-overlay for a lot of the logic.
 */
 
+/*
+ Okay so x11 does not support transparancy or alpha blending, it only supports binary alpha.
+ Transparant images sort-of-look like they're right, but they behave as if the background colo
+ is always a single color.
+
+ We need to use xrender... but then the question is where do we do our actual image composition
+ and rendering.
+*/
+
 use x11_dl::xlib::{self, TrueColor, XImage, Xlib, _XDisplay, GC};
 use x11_dl::{xfixes, xft, xrender};
 
