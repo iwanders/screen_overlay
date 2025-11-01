@@ -17,14 +17,15 @@ use crate::{
  and rendering.
 */
 
-use x11_dl::xlib::{self, TrueColor, XImage, Xlib, _XDisplay, GC};
-use x11_dl::{xfixes, xft, xrender};
+use x11_dl::xlib::{self, Display, Pixmap, TrueColor, XErrorEvent, XImage, Xlib, GC};
+use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
 
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ImageTexture {
-    image: *mut XImage,
+    display: *mut Display,
+    pm: Pixmap,
 }
 impl std::fmt::Debug for ImageTexture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
@@ -34,17 +35,15 @@ impl std::fmt::Debug for ImageTexture {
 impl Drop for ImageTexture {
     fn drop(&mut self) {
         unsafe {
-            if !self.image.is_null() {
-                let instance = xlib::Xlib::open().unwrap();
-                (instance.XDestroyImage)(self.image);
-            }
+            let instance = xlib::Xlib::open().unwrap();
+            (instance.XFreePixmap)(self.display, self.pm);
         }
     }
 }
 
 #[derive(Clone)]
 pub struct PreparedFont {
-    display: *mut _XDisplay,
+    display: *mut Display,
     font: *mut xft::XftFont,
 }
 impl std::fmt::Debug for PreparedFont {
@@ -64,11 +63,55 @@ impl Drop for PreparedFont {
     }
 }
 
+/// We manually handle the panic, otherwise we get a bunch of frames that we don't care about because we captured the bt
+/// from a function in which the unwind isn't possible. This gives us the relevant bt though.
+fn panicker() -> ! {
+    let ln = line!();
+    let bt = std::backtrace::Backtrace::force_capture();
+    let mut text = format!("{:}", bt);
+    // Lets crop this a bit, because we really don't care about anything beyond std::sys::backtrace
+    let loc = text.find("std::sys::backtrace");
+    if let Some(z) = loc {
+        text.truncate(z);
+        // Also walk backwards to find the first newline now and cut from there.
+        if let Some(v) = text.rfind(|z| z == '\n') {
+            text.truncate(v);
+        }
+    };
+    eprintln!("{}", text);
+    std::process::exit(2);
+}
+
+extern "C" fn error_handler(display: *mut Display, event: *mut XErrorEvent) -> i32 {
+    let instance = xlib::Xlib::open().unwrap();
+
+    let code = unsafe { (*event).error_code as i32 };
+    let mut buffer = [0u8; 256];
+    unsafe {
+        (instance.XGetErrorText)(
+            display,
+            code,
+            buffer.as_mut_ptr() as *mut i8,
+            buffer.len() as i32,
+        )
+    };
+    let length = buffer.iter().position(|z| z == &0).unwrap();
+    if length > 0 {
+        let message =
+            std::str::from_utf8(&buffer[..length as usize]).unwrap_or("<invalid message>");
+        eprintln!("X Error: {}", message);
+    } else {
+        eprintln!("X Error: unknown error");
+    }
+    panicker();
+    return 0;
+}
+
 // pub type IDVisual = usize;
 #[derive(Clone, Debug)]
 pub enum IDVisual {
     Text { xft_draw: *mut xft::XftDraw },
-    Image { gc: GC, display: *mut _XDisplay },
+    Image { gc: GC, display: *mut Display },
     None,
 }
 impl Drop for IDVisual {
@@ -95,7 +138,8 @@ impl Drop for IDVisual {
 
 pub struct OverlayImpl {
     instance: Xlib,
-    display: *mut _XDisplay,
+    xrender: Xrender,
+    display: *mut Display,
     screen: Option<i32>,
     window: Option<u64>,
     visual_info: Option<xlib::XVisualInfo>,
@@ -105,12 +149,19 @@ unsafe impl Send for OverlayImpl {}
 impl OverlayImpl {
     pub fn new() -> Result<Self, Error> {
         let instance = xlib::Xlib::open()?;
+        let xrender = xrender::Xrender::open()?;
         let display = unsafe { (instance.XOpenDisplay)(std::ptr::null()) };
         if display.is_null() {
             return Err("failed to retrieve display ptr".into());
         }
+
+        unsafe {
+            (instance.XSetErrorHandler)(Some(error_handler));
+        }
+
         Ok(Self {
             instance,
+            xrender,
             display,
             screen: None,
             window: None,
@@ -308,6 +359,7 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
+        // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
 
         for (_x, _y, pixel) in img.enumerate_pixels_mut() {
@@ -346,10 +398,47 @@ impl OverlayImpl {
         if image.is_null() {
             return Err("image creation failed".into());
         }
+
+        let data = raw_container.as_ptr();
+        let pm = unsafe {
+            (self.instance.XCreatePixmap)(
+                self.display,
+                visual.visualid, // only used for depth properties.
+                width as u32,
+                height as u32,
+                32, // bitmap pad
+            )
+        };
+
+        if pm == 0 {
+            return Err("image creation failed".into());
+        }
+        let drawable = self.window.unwrap();
+        let gc =
+            unsafe { (self.instance.XCreateGC)(self.display, drawable, 0, std::ptr::null_mut()) };
+
+        let _ = unsafe {
+            (self.instance.XPutImage)(
+                self.display,
+                pm,
+                gc,
+                image,
+                0, // src
+                0,
+                0, // destination, drawable.
+                0,
+                width as u32,
+                height as u32,
+            )
+        };
+
         // Image creation succeeded, leak the data because the X11 image owns it now and will clean it up on drop.
         raw_container.leak();
 
-        Ok(ImageTexture { image })
+        Ok(ImageTexture {
+            pm,
+            display: self.display,
+        })
     }
 
     pub fn draw_texture(
@@ -364,21 +453,56 @@ impl OverlayImpl {
         let gc =
             unsafe { (self.instance.XCreateGC)(self.display, drawable, 0, std::ptr::null_mut()) };
         println!("gc: {:?}", gc);
-        // Next up is rendering the image on the gc.
-        let _ = unsafe {
-            (self.instance.XPutImage)(
+
+        // Do we first have to create an XRenderCreatePicture?
+        //
+        unsafe {
+            let fmt =
+                (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardARGB32);
+            println!("below standard format; {:?}", fmt);
+            let p = (self.xrender.XRenderCreatePicture)(
                 self.display,
-                drawable,
-                gc,
-                texture.image,
-                texture_region.min.x as i32, // src
-                texture_region.min.y as i32,
-                position.x as i32, // destination, drawable.
-                position.y as i32,
-                texture_region.width() as u32,
-                texture_region.height() as u32,
-            )
-        };
+                texture.pm,
+                fmt,
+                0,
+                std::ptr::null(),
+            );
+
+            // Next up is rendering the image on the gc.
+            //
+            //    XRenderComposite (Display   *dpy,
+            // int	    op,
+            // Picture   src,
+            // Picture   mask,
+            // Picture   dst,
+            // int	    src_x,
+            // int	    src_y,
+            // int	    mask_x,
+            // int	    mask_y,
+            // int	    dst_x,
+            // int	    dst_y,
+            // unsigned int	width,
+            // unsigned int	height)
+            let d = *self.window.as_ref().unwrap();
+            unsafe {
+                (self.xrender.XRenderComposite)(
+                    self.display,
+                    xrender::PictOpSrc as i32,
+                    p,
+                    0,
+                    d,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    10,
+                    10,
+                );
+            }
+        }
+
         Ok(IDVisual::Image {
             gc,
             display: self.display,
