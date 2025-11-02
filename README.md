@@ -8,7 +8,8 @@ On Windows:
 - Lines, circles, rectangles.
 
 On X11:
-- Text (no text wrapping).
+- ~Text (no text wrapping).~
+- It is now a full screen, click through window with a full opengl context. It doesn't support threading and will draw a single triangle. The `7f74c01a35d30529f37684402d5122eccd274c08` commit is the last one where text worked.
 
 Mostly intended as a library to allow me to display text as a countdown from my behaviour tree library [betula](https://github.com/iwanders/betula/).
 

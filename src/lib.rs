@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 // OverlayImpl is currently a weak contract between windows and linux, should we change that?
 
 #[cfg(target_os = "linux")]
-#[cfg_attr(target_os = "linux", path = "linux.rs")]
+#[cfg_attr(target_os = "linux", path = "linux/mod.rs")]
 mod backend;
 
 #[cfg(target_os = "windows")]
