@@ -27,7 +27,7 @@ use glfw::{Action, Context, Key};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use three_d::Context as Context3D;
-use three_d::Viewport;
+use three_d::{CpuTexture, Viewport};
 
 #[derive(Copy, Clone, Debug)]
 struct TextureTarget(u32);
@@ -58,7 +58,7 @@ impl DrawComponents {
 
 #[derive(Clone)]
 pub struct ImageTexture {
-    texture: TextureTarget,
+    texture: CpuTexture,
 }
 impl std::fmt::Debug for ImageTexture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
@@ -371,12 +371,12 @@ impl OverlayImpl {
             //
             unsafe {
                 // ------
-                // gl::Viewport(0, 0, root_width, root_height);
+                gl::Viewport(0, 0, root_width, root_height);
                 // gl::Enable(gl::BLEND);
                 // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
                 // gl::ClearColor(0.0, 0.0, 0.3, 0.2);
                 // gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-                // realwindow.swap_buffers();
+                realwindow.swap_buffers();
             }
             let context = three_d::context::Context::from_loader_function(|s| {
                 glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void
@@ -447,7 +447,7 @@ impl OverlayImpl {
             self.context = Some(context);
             self.viewport = Some(viewport);
 
-            //self.test_three_d();
+            self.test_three_d();
         }
         Ok(())
     }
@@ -560,126 +560,30 @@ impl OverlayImpl {
         path: P,
     ) -> Result<ImageTexture, Error> {
         // This loads the image to a pixmap, that we can utilise later.
-        let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+        let path: &std::path::Path = path.as_ref();
+        let img = image::ImageReader::open(path)?.decode()?.to_rgba8();
+        let width = img.width();
+        let height = img.height();
+        let d: Vec<[u8; 4]> = img
+            .into_raw()
+            .chunks(4)
+            .map(|z| [z[0], z[1], z[2], z[3]])
+            .collect();
+        let mut data = three_d::core::texture::TextureData::RgbaU8(d);
+        data.to_linear_srgb();
 
-        for (_x, _y, pixel) in img.enumerate_pixels_mut() {
-            let p = pixel.0;
-            let a = p[3];
-            // (*pixel).0 = [p[2], p[1], p[0], a];
-            (*pixel).0 = [a, p[0], p[1], p[2]];
-        }
-
-        let width = img.width() as i32;
-        let height = img.height() as i32;
-
-        // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
-        // Need to transfer ownership of the bytes.
-        let mut raw_container = img.into_raw();
-
-        let data = raw_container.as_ptr() as _;
-        println!("going to load");
-        unsafe {
-            // self.window.as_mut().unwrap().make_current();
-
-            let z = self.window_size.unwrap();
-            // Make a texture.
-            println!("gen text");
-            let mut texture_target: u32 = 0;
-            let tp = (&mut texture_target as *mut _) as *mut _;
-            println!("tp: {:?}", tp);
-            gl::GenTextures(1, tp);
-
-            println!("binding to load");
-            // "Bind" the newly created texture : all future texture functions will modify this texture
-            gl::BindTexture(gl::TEXTURE_2D, *tp);
-
-            println!("loading");
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA as i32,
-                width,
-                height,
-                0,
-                gl::RGBA,
-                gl::UNSIGNED_BYTE,
-                data,
-            );
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-
-            let tt = TextureTarget(*tp);
-            println!("tt: {:?}", tt);
-            return Ok(ImageTexture { texture: tt });
-        }
-
-        // Data goes out of scope here.
-        /*
-
-
-        let window = self.window.unwrap();
-        let image = unsafe {
-            (self.instance.XCreateImage)(
-                self.display,
-                visual.visual,
-                //visual.depth as u32,
-                32,
-                xlib::ZPixmap,
-                0, // offset
-                data as *mut i8,
-                width as u32,
-                height as u32,
-                32,               // bitmap pad
-                (width * 4) as _, // bytes per line
-            )
+        let texture = three_d::core::texture::CpuTexture {
+            name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            data,
+            width,
+            height,
+            min_filter: three_d::Interpolation::Linear,
+            mag_filter: three_d::Interpolation::Linear,
+            mipmap: None,
+            wrap_s: three_d::core::texture::Wrapping::ClampToEdge,
+            wrap_t: three_d::core::texture::Wrapping::ClampToEdge,
         };
-        if image.is_null() {
-            return Err("image creation failed".into());
-        }
-
-        let data = raw_container.as_ptr();
-        let pm = unsafe {
-            (self.instance.XCreatePixmap)(
-                self.display,
-                window, // only used for depth properties.
-                width as u32,
-                height as u32,
-                32, // bitmap pad
-            )
-        };
-        unsafe { (self.instance.XFlush)(self.display) };
-        if pm == 0 {
-            return Err("image creation failed".into());
-        }
-        let drawable = self.window.unwrap();
-
-        let gc = self.gc.unwrap();
-
-        unsafe { (self.instance.XFlush)(self.display) };
-        let _ = unsafe {
-            (self.instance.XPutImage)(
-                self.display,
-                pm,
-                gc,
-                image,
-                0, // src
-                0,
-                0, // destination, drawable.
-                0,
-                width as u32,
-                height as u32,
-            )
-        };
-
-        unsafe { (self.instance.XFlush)(self.display) };
-
-        // Image creation succeeded, leak the data because the X11 image owns it now and will clean it up on drop.
-        raw_container.leak();
-
-        Ok(ImageTexture {
-            pm,
-            display: self.display,
-        })
-        */
+        Ok(ImageTexture { texture })
     }
 
     pub fn draw_texture(
@@ -690,244 +594,8 @@ impl OverlayImpl {
         color: &Color,
         alpha: f32,
     ) -> Result<IDVisual, Error> {
-        unsafe {
-            // https://github.com/rust-tutorials/learn-opengl/blob/ed6ae3250b06223882d99f993372efdbee4637e7/examples/001-triangle-arrays1.rs#L70C1-L169C1
-            type Vertex = [f32; 3];
-
-            const VERTICES: [Vertex; 3] = [
-                [-0.5, -0.5, 0.0], //
-                [0.5, -0.5, 0.0],
-                [0.0, 0.5, 0.0],
-            ];
-
-            const VERT_SHADER: &str = r#"#version 330 core
-              layout (location = 0) in vec3 pos;
-
-              void main() {
-                gl_Position = vec4(pos.x, pos.y, pos.z, 1.0);
-              }
-            "#;
-
-            const FRAG_SHADER: &str = r#"#version 330 core
-              out vec4 final_color;
-
-              void main() {
-                final_color = vec4(1.0, 0.5, 0.2, 1.0);
-              }
-            "#;
-
-            let mut vao = 0;
-            gl::GenVertexArrays(1, &mut vao);
-            assert_ne!(vao, 0);
-            gl::BindVertexArray(vao);
-
-            let mut vbo = 0;
-            gl::GenBuffers(1, &mut vbo);
-            assert_ne!(vbo, 0);
-            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl::BufferData(
-                gl::ARRAY_BUFFER,
-                size_of_val(&VERTICES) as isize,
-                VERTICES.as_ptr().cast(),
-                gl::STATIC_DRAW,
-            );
-
-            gl::VertexAttribPointer(
-                0,
-                3,
-                gl::FLOAT,
-                gl::FALSE,
-                size_of::<Vertex>().try_into().unwrap(),
-                0 as *const _,
-            );
-            gl::EnableVertexAttribArray(0);
-
-            let vertex_shader = gl::CreateShader(gl::VERTEX_SHADER);
-            assert_ne!(vertex_shader, 0);
-            gl::ShaderSource(
-                vertex_shader,
-                1,
-                &(VERT_SHADER.as_bytes().as_ptr().cast()),
-                &(VERT_SHADER.len().try_into().unwrap()),
-            );
-            gl::CompileShader(vertex_shader);
-            let mut success = 0;
-            gl::GetShaderiv(vertex_shader, gl::COMPILE_STATUS, &mut success);
-            if success == 0 {
-                let mut v: Vec<u8> = Vec::with_capacity(1024);
-                let mut log_len = 0_i32;
-                gl::GetShaderInfoLog(vertex_shader, 1024, &mut log_len, v.as_mut_ptr().cast());
-                v.set_len(log_len.try_into().unwrap());
-                panic!("Vertex Compile Error: {}", String::from_utf8_lossy(&v));
-            }
-
-            let fragment_shader = gl::CreateShader(gl::FRAGMENT_SHADER);
-            assert_ne!(fragment_shader, 0);
-            gl::ShaderSource(
-                fragment_shader,
-                1,
-                &(FRAG_SHADER.as_bytes().as_ptr().cast()),
-                &(FRAG_SHADER.len().try_into().unwrap()),
-            );
-            gl::CompileShader(fragment_shader);
-            let mut success = 0;
-            gl::GetShaderiv(fragment_shader, gl::COMPILE_STATUS, &mut success);
-            if success == 0 {
-                let mut v: Vec<u8> = Vec::with_capacity(1024);
-                let mut log_len = 0_i32;
-                gl::GetShaderInfoLog(fragment_shader, 1024, &mut log_len, v.as_mut_ptr().cast());
-                v.set_len(log_len.try_into().unwrap());
-                panic!("Fragment Compile Error: {}", String::from_utf8_lossy(&v));
-            }
-
-            let shader_program = gl::CreateProgram();
-            assert_ne!(shader_program, 0);
-            gl::AttachShader(shader_program, vertex_shader);
-            gl::AttachShader(shader_program, fragment_shader);
-            gl::LinkProgram(shader_program);
-            let mut success = 0;
-            gl::GetProgramiv(shader_program, gl::LINK_STATUS, &mut success);
-            if success == 0 {
-                let mut v: Vec<u8> = Vec::with_capacity(1024);
-                let mut log_len = 0_i32;
-                gl::GetProgramInfoLog(shader_program, 1024, &mut log_len, v.as_mut_ptr().cast());
-                v.set_len(log_len.try_into().unwrap());
-                panic!("Program Link Error: {}", String::from_utf8_lossy(&v));
-            }
-            gl::DeleteShader(vertex_shader);
-            gl::DeleteShader(fragment_shader);
-
-            gl::UseProgram(shader_program);
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
-            self.window.as_mut().unwrap().swap_buffers();
-        }
-
-        return Ok(IDVisual::Image {});
-        /*
-        println!("gc: {:?}", gc);
-
-        // Do we first have to create an XRenderCreatePicture?
-        //
-        unsafe {
-            let d = *self.window.as_ref().unwrap();
-            println!("before find standard");
-            let fmt =
-                (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardARGB32);
-            let visual = self.visual_info.as_ref().unwrap();
-            let fmtrgb =
-                (self.xrender.XRenderFindStandardFormat)(self.display, xrender::PictStandardRGB24);
-            let window_fmt = (self.xrender.XRenderFindVisualFormat)(
-                self.display,
-                (self.instance.XDefaultVisual)(self.display, self.screen.unwrap()),
-            );
-            println!("below standard format; XDefaultVisual {:?}", window_fmt);
-            let window_fmt = (self.xrender.XRenderFindVisualFormat)(self.display, visual.visual);
-            println!("below standard XRenderFindVisualFormat; fmt {:?}", fmt);
-            println!("below standard format; window_fmt {:?}", window_fmt);
-            println!("below standard format; fmtrgb {:?}", fmtrgb);
-            let p = (self.xrender.XRenderCreatePicture)(
-                self.display,
-                texture.pm,
-                window_fmt,
-                0,
-                std::ptr::null(),
-            );
-
-            let wp = (self.xrender.XRenderCreatePicture)(
-                self.display,
-                self.window.unwrap(),
-                window_fmt,
-                0,
-                std::ptr::null(),
-            );
-            unsafe { (self.instance.XFlush)(self.display) };
-
-            /*
-            XRenderFillRectangle (Display		    *dpy,
-                  int		    op,
-                  Picture		    dst,
-                  _Xconst XRenderColor  *color,
-                  int		    x,
-                  int		    y,
-                  unsigned int	    width,
-                  unsigned int	    height)*/
-            let mut render_color: xrender::XRenderColor =
-                std::mem::MaybeUninit::zeroed().assume_init();
-            let r = 255; // This rectangle works.
-            let g = 0;
-            let b = 0;
-            let alpha = 255;
-            render_color.red = (r & 0xFF) * 257; // 8bit to 16bit
-            render_color.green = (g & 0xFF) * 257;
-            render_color.blue = (b & 0xFF) * 257;
-            render_color.alpha = alpha * 257;
-            (self.xrender.XRenderFillRectangle)(
-                self.display,
-                xrender::PictOpSrc, // is this just assign?
-                p,                  // writing to wp here fails.
-                &render_color,
-                0,
-                0,
-                10,
-                10,
-            );
-            render_color.blue = 255 * 257;
-            render_color.alpha = 128 * 257;
-            (self.xrender.XRenderFillRectangle)(
-                self.display,
-                xrender::PictOpSrc, // is this just assign?
-                p,
-                &render_color,
-                30,
-                0,
-                20,
-                20,
-            );
-
-            // Next up is rendering the image on the gc.
-            //
-            //    XRenderComposite (Display   *dpy,
-            // int	    op,
-            // Picture   src,
-            // Picture   mask,
-            // Picture   dst,
-            // int	    src_x,
-            // int	    src_y,
-            // int	    mask_x,
-            // int	    mask_y,
-            // int	    dst_x,
-            // int	    dst_y,
-            // unsigned int	width,
-            // unsigned int	height)
-
-            unsafe {
-                (self.xrender.XRenderComposite)(
-                    self.display,
-                    // xrender::PictOpOver as i32,
-                    xrender::PictOpSrc as i32,
-                    p,  // src
-                    0,  // mask
-                    wp, // dest
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    texture_region.width() as u32,
-                    texture_region.height() as u32,
-                );
-            } /**/
-            (self.xrender.XRenderFreePicture)(self.display, wp);
-            unsafe { (self.instance.XFlush)(self.display) };
-        }
-
-        Ok(IDVisual::Image {
-            gc,
-            display: self.display,
-        })
-        */
-        todo!()
+        self.test_three_d();
+        return Ok(IDVisual::None);
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
@@ -987,6 +655,8 @@ impl OverlayImpl {
                     line.into_iter().chain(&rectangle).chain(&circle),
                     &[],
                 );
+
+            self.window.as_mut().unwrap().swap_buffers();
         }
     }
 }
