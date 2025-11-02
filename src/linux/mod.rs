@@ -26,6 +26,8 @@ use glfw::{Action, Context, Key};
 
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use three_d::Context as Context3D;
+use three_d::Viewport;
 
 #[derive(Copy, Clone, Debug)]
 struct TextureTarget(u32);
@@ -179,6 +181,9 @@ pub struct OverlayImpl {
     // winit window and size
     window: Option<PWindow>,
     window_size: Option<Rect>,
+    // The three_d context
+    context: Option<Context3D>,
+    viewport: Option<Viewport>,
     // drawables
     components: ComponentState,
 }
@@ -212,6 +217,8 @@ impl OverlayImpl {
             screen: None,
             window: None,
             window_size: None,
+            context: None,
+            viewport: None,
         })
     }
 
@@ -364,12 +371,12 @@ impl OverlayImpl {
             //
             unsafe {
                 // ------
-                gl::Viewport(0, 0, root_width, root_height);
-                gl::Enable(gl::BLEND);
-                gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-                gl::ClearColor(0.0, 0.0, 0.3, 0.2);
-                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-                realwindow.swap_buffers();
+                // gl::Viewport(0, 0, root_width, root_height);
+                // gl::Enable(gl::BLEND);
+                // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                // gl::ClearColor(0.0, 0.0, 0.3, 0.2);
+                // gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                // realwindow.swap_buffers();
             }
             let context = three_d::context::Context::from_loader_function(|s| {
                 glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void
@@ -382,63 +389,6 @@ impl OverlayImpl {
                 height: root_height as u32,
             };
             context.set_viewport(viewport);
-            context.set_blend(three_d::Blend::Enabled {
-                source_rgb_multiplier: three_d::BlendMultiplierType::OneMinusSrcAlpha,
-                source_alpha_multiplier: three_d::BlendMultiplierType::Zero,
-                destination_rgb_multiplier: three_d::BlendMultiplierType::OneMinusSrcAlpha,
-                destination_alpha_multiplier: three_d::BlendMultiplierType::Zero,
-                rgb_equation: three_d::BlendEquationType::Add,
-                alpha_equation: three_d::BlendEquationType::Add,
-            });
-            let width = root_width;
-            let height = root_height;
-            let scale_factor = 1.0;
-            {
-                use three_d::*;
-                let mut rectangle = Gm::new(
-                    Rectangle::new(
-                        &context,
-                        vec2(200.0, 200.0) * scale_factor,
-                        degrees(45.0),
-                        100.0 * scale_factor,
-                        200.0 * scale_factor,
-                    ),
-                    ColorMaterial {
-                        color: Srgba::RED,
-                        ..Default::default()
-                    },
-                );
-                let mut circle = Gm::new(
-                    Circle::new(
-                        &context,
-                        vec2(500.0, 500.0) * scale_factor,
-                        200.0 * scale_factor,
-                    ),
-                    ColorMaterial {
-                        color: Srgba::BLUE,
-                        ..Default::default()
-                    },
-                );
-                let mut line = Gm::new(
-                    Line::new(
-                        &context,
-                        vec2(0.0, 0.0) * scale_factor,
-                        vec2(width as f32, height as f32) * scale_factor,
-                        5.0 * scale_factor,
-                    ),
-                    ColorMaterial {
-                        color: Srgba::GREEN,
-                        ..Default::default()
-                    },
-                );
-                RenderTarget::screen(&context, viewport.width, viewport.height)
-                    .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
-                    .render(
-                        Camera::new_2d(viewport),
-                        line.into_iter().chain(&rectangle).chain(&circle),
-                        &[],
-                    );
-            }
 
             /*
             unsafe {
@@ -494,6 +444,10 @@ impl OverlayImpl {
             self.screen = Some(screen);
             // self.default_visual = Some(default_visual);
             self.window_size = Some(window_size);
+            self.context = Some(context);
+            self.viewport = Some(viewport);
+
+            //self.test_three_d();
         }
         Ok(())
     }
@@ -978,6 +932,62 @@ impl OverlayImpl {
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
         Ok(())
+    }
+
+    fn test_three_d(&mut self) {
+        let context = self.context.as_ref().unwrap();
+        let size = self.window_size.as_ref().unwrap();
+        let width = size.width();
+        let height = size.height();
+        let viewport = *self.viewport.as_ref().unwrap();
+        let scale_factor = 1.0;
+        {
+            use three_d::*;
+            let mut rectangle = Gm::new(
+                Rectangle::new(
+                    &context,
+                    vec2(200.0, 200.0) * scale_factor,
+                    degrees(45.0),
+                    100.0 * scale_factor,
+                    200.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::RED,
+                    ..Default::default()
+                },
+            );
+            let mut circle = Gm::new(
+                Circle::new(
+                    &context,
+                    vec2(500.0, 500.0) * scale_factor,
+                    200.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::BLUE,
+                    ..Default::default()
+                },
+            );
+            let mut line = Gm::new(
+                Line::new(
+                    &context,
+                    vec2(0.0, 0.0) * scale_factor,
+                    vec2(width as f32, height as f32) * scale_factor,
+                    5.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::GREEN,
+                    ..Default::default()
+                },
+            );
+            RenderTarget::screen(&context, viewport.width, viewport.height)
+                // .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
+                .clear(ClearState::none())
+                .render(
+                    Camera::new_2d(viewport),
+                    line.into_iter().chain(&rectangle).chain(&circle),
+                    &[],
+                );
+        }
     }
 }
 
