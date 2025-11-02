@@ -47,7 +47,5 @@ features = [
 
 [target.'cfg(any(target_os = "linux"))'.dependencies]
 x11-dl = "2.21"
-glfw = "0.59.0" # 0.60.0 breaks getting the raw window handle.
-#gl = "0.14.0"
-vello = "0.6.0"
-pollster = "0.4.0"
+glfw = "0.60.0"
+gl = "0.14.0"

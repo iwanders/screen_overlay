@@ -8,7 +8,7 @@ On Windows:
 - Lines, circles, rectangles.
 
 On X11:
-- Text (no text wrapping)
+- Text (no text wrapping).
 
 Mostly intended as a library to allow me to display text as a countdown from my behaviour tree library [betula](https://github.com/iwanders/betula/).
 

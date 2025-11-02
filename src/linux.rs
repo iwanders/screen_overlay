@@ -17,18 +17,10 @@ use crate::{
  and rendering.
 */
 
-use std::num::NonZeroUsize;
 use x11_dl::xlib::{self, Display, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib, GC};
 use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
 
-use vello::kurbo::{Affine, Circle, Ellipse, Line, RoundedRect, Stroke as VStroke};
-use vello::peniko::color::palette;
-use vello::peniko::Color as VColor;
-use vello::util::{RenderContext, RenderSurface};
-use vello::{AaConfig, Renderer, RendererOptions, Scene};
-
 use std::sync::Arc;
-use vello::wgpu;
 
 #[derive(Clone)]
 pub struct ImageTexture {
@@ -166,54 +158,6 @@ pub struct OverlayImpl {
 }
 unsafe impl Send for OverlayImpl {}
 
-fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>) -> Renderer {
-    Renderer::new(
-        &render_cx.devices[surface.dev_id].device,
-        RendererOptions {
-            use_cpu: false,
-            antialiasing_support: vello::AaSupport::all(),
-            num_init_threads: NonZeroUsize::new(1),
-            pipeline_cache: None,
-        },
-    )
-    .expect("Couldn't create renderer")
-}
-
-fn add_shapes_to_scene(scene: &mut Scene) {
-    // Draw an outlined rectangle
-    let stroke = VStroke::new(6.0);
-    let rect = RoundedRect::new(10.0, 10.0, 240.0, 240.0, 20.0);
-    let rect_stroke_color = VColor::new([0.9804, 0.702, 0.5294, 1.]);
-    scene.stroke(&stroke, Affine::IDENTITY, rect_stroke_color, None, &rect);
-
-    // Draw a filled circle
-    let circle = Circle::new((420.0, 200.0), 120.0);
-    let circle_fill_color = VColor::new([0.9529, 0.5451, 0.6588, 1.]);
-    scene.fill(
-        vello::peniko::Fill::NonZero,
-        Affine::IDENTITY,
-        circle_fill_color,
-        None,
-        &circle,
-    );
-
-    // Draw a filled ellipse
-    let ellipse = Ellipse::new((250.0, 420.0), (100.0, 160.0), -90.0);
-    let ellipse_fill_color = VColor::new([0.7961, 0.651, 0.9686, 1.]);
-    scene.fill(
-        vello::peniko::Fill::NonZero,
-        Affine::IDENTITY,
-        ellipse_fill_color,
-        None,
-        &ellipse,
-    );
-
-    // Draw a straight line
-    let line = Line::new((260.0, 20.0), (620.0, 100.0));
-    let line_stroke_color = VColor::new([0.5373, 0.7059, 0.9804, 1.]);
-    scene.stroke(&stroke, Affine::IDENTITY, line_stroke_color, None, &line);
-}
-
 impl OverlayImpl {
     pub fn new() -> Result<Self, Error> {
         let instance = xlib::Xlib::open()?;
@@ -258,7 +202,7 @@ impl OverlayImpl {
             glfw.window_hint(glfw::WindowHint::OpenGlProfile(
                 glfw::OpenGlProfileHint::Core,
             ));
-            glfw.window_hint(glfw::WindowHint::Decorated(true));
+            glfw.window_hint(glfw::WindowHint::Decorated(false));
             glfw.window_hint(glfw::WindowHint::FocusOnShow(false));
             glfw.window_hint(glfw::WindowHint::AlphaBits(Some(8)));
             glfw.window_hint(glfw::WindowHint::DepthBits(Some(24)));
@@ -278,11 +222,7 @@ impl OverlayImpl {
             let glxwindow = window.get_glx_context();
             // int XChangeWindowAttributes(Display *display, Window w, unsigned long valuemask, XSetWindowAttributes *attributes);
             // set override direct
-            println!("jldksjflsdfj");
-            use vello::wgpu::rwh::{HasRawDisplayHandle, HasRawWindowHandle};
-            let w = window.raw_window_handle(); // This here causes an glfw panic on glfw-rs  # 0.60.0 breaks getting the raw window handle.
-            println!("jldksjflsdfj");
-            println!("w: {:?}", w);
+            //
 
             let mut z: xlib::XWindowAttributes = std::mem::MaybeUninit::zeroed().assume_init();
 
@@ -299,7 +239,7 @@ impl OverlayImpl {
             attributes.border_pixel = (self.instance.XBlackPixel)(self.display, screen);
             attributes.background_pixel = (self.instance.XBlackPixel)(self.display, screen);
             */
-            attributes.override_redirect = false as i32;
+            attributes.override_redirect = true as i32;
             //attributes.event_mask = xlib::ExposureMask;
 
             (self.instance.XUnmapWindow)(self.display, xwindow);
@@ -316,7 +256,7 @@ impl OverlayImpl {
             window.set_framebuffer_size_polling(true);
             let mut realwindow = window;
             let window = xwindow;
-            // gl::load_with(|s| glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void);
+            gl::load_with(|s| glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void);
 
             (self.instance.XMapWindow)(self.display, xwindow);
             (self.instance.XRaiseWindow)(self.display, xwindow);
@@ -377,158 +317,55 @@ impl OverlayImpl {
             let gl = unsafe { GlFns::load_from(&|p| SDL_GL_GetProcAddress(p) as _).unwrap() };
             */
 
-            let mut context = RenderContext::new();
-            let width = 100;
-            let height = 100;
-
-            let target_xcb = wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: wgpu::rwh::RawDisplayHandle::Xcb(
-                    wgpu::rwh::XcbDisplayHandle::new(
-                        Some(
-                            std::ptr::NonNull::new((self.display as *mut std::ffi::c_void))
-                                .unwrap(),
-                        ),
-                        0,
-                    ),
-                ),
-                raw_window_handle: wgpu::rwh::RawWindowHandle::Xcb(
-                    wgpu::rwh::XcbWindowHandle::new(
-                        std::num::NonZeroU32::new(xwindow as u32).unwrap(),
-                    ),
-                ),
-            };
-            let target_xlib = wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: wgpu::rwh::RawDisplayHandle::Xlib(
-                    wgpu::rwh::XlibDisplayHandle::new(
-                        Some(
-                            std::ptr::NonNull::new((self.display as *mut std::ffi::c_void))
-                                .unwrap(),
-                        ),
-                        screen,
-                    ),
-                ),
-                raw_window_handle: wgpu::rwh::RawWindowHandle::Xlib(
-                    wgpu::rwh::XlibWindowHandle::new(xwindow),
-                ),
-            };
-            let target_win = wgpu::SurfaceTargetUnsafe::from_window(&realwindow).unwrap();
-            let target = target_win;
-            let surface_future = unsafe {
-                context.create_render_surface(
-                    context.instance.create_surface_unsafe(target).unwrap(),
-                    width,
-                    height,
-                    wgpu::PresentMode::AutoVsync,
-                )
-            };
-
-            let surface = pollster::block_on(surface_future).expect("Error creating surface.");
-            println!("surface: {:?}", surface);
-
-            let mut renderers: Vec<Option<Renderer>> = vec![];
-
-            renderers.resize_with(context.devices.len(), || None);
-            let _ = renderers[surface.dev_id].insert(create_vello_renderer(&context, &surface));
-
-            let mut scene = Scene::new();
-
-            'running: loop {
-                scene.reset();
-
-                add_shapes_to_scene(&mut scene);
-
-                let device_handle = &context.devices[surface.dev_id];
-
-                renderers[surface.dev_id]
-                    .as_mut()
-                    .unwrap()
-                    .render_to_texture(
-                        &device_handle.device,
-                        &device_handle.queue,
-                        &scene,
-                        &surface.target_view,
-                        &vello::RenderParams {
-                            base_color: palette::css::BLACK, // Background color
-                            width,
-                            height,
-                            antialiasing_method: AaConfig::Msaa16,
-                        },
-                    )
-                    .expect("failed to render to surface");
-
-                let surface_texture = surface
-                    .surface
-                    .get_current_texture()
-                    .expect("failed to get surface texture");
-
-                let mut encoder =
-                    device_handle
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Surface Blit"),
-                        });
-                surface.blitter.copy(
-                    &device_handle.device,
-                    &mut encoder,
-                    &surface.target_view,
-                    &surface_texture
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default()),
+            unsafe {
+                //gl::Viewport(0, 0, 100, 100);
+                //gl::ClearColor(0.2, 0.3, 0.3, 0.2);
+                //gl::Clear(gl::COLOR_BUFFER_BIT);
+                let mut texture = 3;
+                gl::GenTextures(1, &mut texture);
+                gl::BindTexture(gl::TEXTURE_2D, texture);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGBA as i32,
+                    10,
+                    10,
+                    0,
+                    gl::RGBA as u32,
+                    gl::UNSIGNED_BYTE,
+                    std::ptr::null_mut(),
                 );
-                device_handle.queue.submit([encoder.finish()]);
-
-                surface_texture.present();
             }
-            /*
-                        unsafe {
-                            //gl::Viewport(0, 0, 100, 100);
-                            //gl::ClearColor(0.2, 0.3, 0.3, 0.2);
-                            //gl::Clear(gl::COLOR_BUFFER_BIT);
-                            let mut texture = 3;
-                            gl::GenTextures(1, &mut texture);
-                            gl::BindTexture(gl::TEXTURE_2D, texture);
-                            gl::TexImage2D(
-                                gl::TEXTURE_2D,
-                                0,
-                                gl::RGBA as i32,
-                                10,
-                                10,
-                                0,
-                                gl::RGBA as u32,
-                                gl::UNSIGNED_BYTE,
-                                std::ptr::null_mut(),
-                            );
-                        }
 
-                        while !realwindow.should_close() {
-                            // events
-                            // -----
-                            // process_events(&mut window, &events);
+            while !realwindow.should_close() {
+                // events
+                // -----
+                // process_events(&mut window, &events);
 
-                            // render
-                            // ------
-                            unsafe {
-                                gl::Viewport(0, 0, 100, 100);
+                // render
+                // ------
+                unsafe {
+                    gl::Viewport(0, 0, 100, 100);
 
-                                gl::Enable(gl::BLEND);
-                                gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-                                gl::ClearColor(0.0, 0.3, 0.3, 0.5);
-                                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                    gl::Enable(gl::BLEND);
+                    gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                    gl::ClearColor(0.0, 0.3, 0.3, 0.5);
+                    gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-                                // draw our first triangle
-                                // gl::UseProgram(shaderProgram);
-                                // gl::BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-                                gl::DrawArrays(gl::TRIANGLES, 0, 3);
-                                // glBindVertexArray(0); // no need to unbind it every time
-                            }
+                    // draw our first triangle
+                    // gl::UseProgram(shaderProgram);
+                    // gl::BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+                    gl::DrawArrays(gl::TRIANGLES, 0, 3);
+                    // glBindVertexArray(0); // no need to unbind it every time
+                }
 
-                            // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-                            // -------------------------------------------------------------------------------
-                            realwindow.swap_buffers();
-                            //(self.glx.glXSwapBuffers)(self.display, glxwindow as u64);
-                            glfw.poll_events();
-                        }
-            */
+                // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+                // -------------------------------------------------------------------------------
+                realwindow.swap_buffers();
+                //(self.glx.glXSwapBuffers)(self.display, glxwindow as u64);
+                glfw.poll_events();
+            }
+
             let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
             self.window = Some(window);
             // self.visual_info = Some(visual_info);
