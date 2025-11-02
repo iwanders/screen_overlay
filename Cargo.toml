@@ -49,3 +49,4 @@ features = [
 x11-dl = "2.21"
 glfw = "0.60.0"
 gl = "0.14.0"
+parking_lot = "0.12.5"

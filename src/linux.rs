@@ -21,11 +21,42 @@ use glfw::PWindow;
 use std::sync::Arc;
 use x11_dl::xlib::{self, Display, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib, GC};
 use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
+extern crate glfw;
+use glfw::{Action, Context, Key};
+
+use parking_lot::RwLock;
+use std::collections::HashMap;
+
+#[derive(Copy, Clone, Debug)]
+struct TextureTarget(u32);
+
+struct DrawId(u64);
+struct DrawTexture {
+    position: Point,
+    texture: ImageTexture,
+    texture_region: Rect,
+    color: Color,
+    alpha: f32,
+}
+
+type ComponentState = Arc<RwLock<DrawComponents>>;
+struct DrawComponents {
+    textures: HashMap<DrawId, DrawTexture>,
+    id_counter: usize,
+}
+impl DrawComponents {
+    fn new() -> Arc<RwLock<Self>> {
+        RwLock::new(Self {
+            textures: Default::default(),
+            id_counter: 0,
+        })
+        .into()
+    }
+}
 
 #[derive(Clone)]
 pub struct ImageTexture {
-    display: *mut Display,
-    pm: Pixmap,
+    texture: TextureTarget,
 }
 impl std::fmt::Debug for ImageTexture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
@@ -33,12 +64,7 @@ impl std::fmt::Debug for ImageTexture {
     }
 }
 impl Drop for ImageTexture {
-    fn drop(&mut self) {
-        unsafe {
-            let instance = xlib::Xlib::open().unwrap();
-            (instance.XFreePixmap)(self.display, self.pm);
-        }
-    }
+    fn drop(&mut self) {}
 }
 
 #[derive(Clone)]
@@ -142,17 +168,19 @@ macro_rules! xflush {
 }
 
 pub struct OverlayImpl {
+    // Libs
     instance: Xlib,
     xrender: Xrender,
     glx: x11_dl::glx::Glx,
+    glfw: glfw::Glfw,
+    // X11 stuff
     display: *mut Display,
-    // default_visual: Option<*mut Visual>,
     screen: Option<i32>,
-    // window: Option<u64>,
-    // visual_info: Option<xlib::XVisualInfo>,
-    // gc: Option<GC>,
+    // winit window and size
     window: Option<PWindow>,
     window_size: Option<Rect>,
+    // drawables
+    components: ComponentState,
 }
 unsafe impl Send for OverlayImpl {}
 
@@ -166,6 +194,10 @@ impl OverlayImpl {
             return Err("failed to retrieve display ptr".into());
         }
 
+        use glfw::fail_on_errors;
+
+        let glfw = glfw::init(fail_on_errors!()).unwrap();
+
         unsafe {
             (instance.XSetErrorHandler)(Some(error_handler));
         }
@@ -173,8 +205,10 @@ impl OverlayImpl {
         Ok(Self {
             instance,
             xrender,
+            glfw,
             glx,
             display,
+            components: DrawComponents::new(),
             screen: None,
             window: None,
             window_size: None,
@@ -201,11 +235,7 @@ impl OverlayImpl {
             let y = 0;
             let window_size = Rect::from(0.0, 0.0).sized(root_width as f32, root_height as f32);
 
-            use glfw::fail_on_errors;
-            let mut glfw = glfw::init(fail_on_errors!()).unwrap();
-
-            extern crate glfw;
-            use glfw::{Action, Context, Key};
+            let glfw = &mut self.glfw;
             glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
             glfw.window_hint(glfw::WindowHint::OpenGlProfile(
                 glfw::OpenGlProfileHint::Core,
@@ -268,7 +298,9 @@ impl OverlayImpl {
             window.set_framebuffer_size_polling(true);
             let mut realwindow = window;
             let window = xwindow;
+            println!("viewport is {:?}", gl::Viewport::is_loaded());
             gl::load_with(|s| glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void);
+            println!("viewport is {:?}", gl::Viewport::is_loaded());
 
             (self.instance.XMapWindow)(self.display, xwindow);
             (self.instance.XRaiseWindow)(self.display, xwindow);
@@ -328,6 +360,19 @@ impl OverlayImpl {
             realwindow.set_size(root_width as i32, root_height as i32);
             (self.instance.XMapWindow)(self.display, xwindow);
 
+            // clear the screen once
+            //
+            unsafe {
+                // ------
+                gl::Viewport(0, 0, root_width, root_height);
+                gl::Enable(gl::BLEND);
+                gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                gl::ClearColor(0.0, 0.0, 0.3, 0.2);
+                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                realwindow.swap_buffers();
+            }
+
+            /*
             unsafe {
                 //gl::Viewport(0, 0, 100, 100);
                 //gl::ClearColor(0.2, 0.3, 0.3, 0.2);
@@ -375,7 +420,7 @@ impl OverlayImpl {
                 //(self.glx.glXSwapBuffers)(self.display, glxwindow as u64);
                 glfw.poll_events();
             }
-
+            */
             self.window = Some(realwindow);
             // self.visual_info = Some(visual_info);
             self.screen = Some(screen);
@@ -492,14 +537,8 @@ impl OverlayImpl {
         &mut self,
         path: P,
     ) -> Result<ImageTexture, Error> {
-        return Ok(ImageTexture {
-            pm: 0,
-            display: self.display,
-        });
-        /*
         // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
-        img.save("/tmp/foo.png").unwrap();
 
         for (_x, _y, pixel) in img.enumerate_pixels_mut() {
             let p = pixel.0;
@@ -508,22 +547,52 @@ impl OverlayImpl {
             (*pixel).0 = [a, p[0], p[1], p[2]];
         }
 
-        let width = img.width();
-        let height = img.height();
-
-        let visual = *self.visual_info.as_ref().unwrap();
+        let width = img.width() as i32;
+        let height = img.height() as i32;
 
         // XDestroyImage() function calls frees both the image structure and the data pointed to by the image structure.
         // Need to transfer ownership of the bytes.
         let mut raw_container = img.into_raw();
-        for i in 0..raw_container.len() / 4 {
-            // raw_container[i * 4] = 0;
-            // raw_container[i * 4 + 1] = 0;
-            // raw_container[i * 4 + 2] = 0;
-            // raw_container[i * 4 + 3] = 255;
+
+        let data = raw_container.as_ptr() as _;
+        println!("going to load");
+        unsafe {
+            self.window.as_mut().unwrap().make_current();
+
+            let z = self.window_size.unwrap();
+            // Make a texture.
+            println!("gen text");
+            let mut texture_target: u32 = 0;
+            let tp = (&mut texture_target as *mut _) as *mut _;
+            println!("tp: {:?}", tp);
+            gl::GenTextures(3000, tp);
+
+            println!("binding to load");
+            // "Bind" the newly created texture : all future texture functions will modify this texture
+            gl::BindTexture(gl::TEXTURE_2D, *tp);
+
+            println!("loading");
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA as i32,
+                width,
+                height,
+                0,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                data,
+            );
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+
+            let tt = TextureTarget(*tp);
+            println!("tt: {:?}", tt);
+            return Ok(ImageTexture { texture: tt });
         }
 
-        let data = raw_container.as_ptr();
+        // Data goes out of scope here.
+        /*
+
 
         let window = self.window.unwrap();
         let image = unsafe {

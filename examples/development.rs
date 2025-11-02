@@ -31,6 +31,14 @@ pub fn main() -> std::result::Result<(), Error> {
             a: 128,
         };
         let alpha = 0.5;
+        println!("first image alloc");
+        let image2 = twindow
+            .load_texture(std::path::PathBuf::from(
+                "PNG_transparency_demonstration_1.png",
+            ))
+            .expect("failed to load image");
+
+        println!("second image alloc");
         let image2 = twindow
             .load_texture(std::path::PathBuf::from(
                 "PNG_transparency_demonstration_1.png",
