@@ -47,6 +47,5 @@ features = [
 
 [target.'cfg(any(target_os = "linux"))'.dependencies]
 x11-dl = "2.21"
-winit = "0.28.7"
-three-d = "0.18.2"
-raw-window-handle = "0.5.2"
+glfw = "0.60.0"
+gl = "0.14.0"
