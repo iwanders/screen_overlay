@@ -193,8 +193,15 @@ impl OverlayImpl {
             let x = 0;
             let y = 0;
 
+            let event_loop = winit::event_loop::EventLoop::new();
+            let orig_window = winit::window::Window::new(&event_loop).unwrap();
+            orig_window.set_decorations(false);
+            orig_window.set_transparent(true);
+
+            /*
             use glfw::fail_on_errors;
             let mut glfw = glfw::init(fail_on_errors!()).unwrap();
+
 
             extern crate glfw;
             use glfw::{Action, Context, Key};
@@ -217,14 +224,26 @@ impl OverlayImpl {
             let (mut window, events) = glfw
                 .create_window(300, 300, "Hello this is window", glfw::WindowMode::Windowed)
                 .expect("Failed to create GLFW window.");
+            */
+            use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+            let xwindow = orig_window.raw_display_handle();
+            let connection_display = match xwindow {
+                raw_window_handle::RawDisplayHandle::Xlib(h) => h.display,
+                raw_window_handle::RawDisplayHandle::Xcb(h) => h.connection,
 
-            let xwindow = window.get_x11_window() as u64;
-            let glxwindow = window.get_glx_context();
+                _ => panic!(),
+            };
+            let wwwhind = orig_window.raw_window_handle();
+            let xwindow = match wwwhind {
+                raw_window_handle::RawWindowHandle::Xlib(h) => h.window,
+                raw_window_handle::RawWindowHandle::Xcb(h) => h.window as u64,
+
+                _ => panic!(),
+            };
+            // let glxwindow = window.get_glx_context();
             // int XChangeWindowAttributes(Display *display, Window w, unsigned long valuemask, XSetWindowAttributes *attributes);
             // set override direct
             //
-
-            let mut z: xlib::XWindowAttributes = std::mem::MaybeUninit::zeroed().assume_init();
 
             let mut attributes: xlib::XSetWindowAttributes =
                 std::mem::MaybeUninit::zeroed().assume_init();
@@ -251,12 +270,7 @@ impl OverlayImpl {
                 &mut attributes,
             );
 
-            window.make_current();
-            window.set_key_polling(false);
-            window.set_framebuffer_size_polling(true);
-            let mut realwindow = window;
             let window = xwindow;
-            gl::load_with(|s| glfw.get_proc_address_raw(s).unwrap() as *const std::ffi::c_void);
 
             (self.instance.XMapWindow)(self.display, xwindow);
             (self.instance.XRaiseWindow)(self.display, xwindow);
@@ -312,11 +326,36 @@ impl OverlayImpl {
                 0,
             );
 
+            // https://github.com/glfw/glfw/blob/8e15281d34a8b9ee9271ccce38177a3d812456f8/src/x11_window.c#L366
+            //const unsigned long value = 1;
+            //
+            // XChangeProperty(_glfw.x11.display,  window->x11.handle,
+            //                 _glfw.x11.NET_WM_BYPASS_COMPOSITOR, XA_CARDINAL, 32,
+            //                 PropModeReplace, (unsigned char*) &value, 1);
+
+            let wm_bypass_comp = (self.instance.XInternAtom)(
+                self.display,
+                b"_NET_WM_BYPASS_COMPOSITOR".as_ptr() as *const i8,
+                0,
+            );
+            let value = 1u64;
+            (self.instance.XChangeProperty)(
+                self.display,
+                window,
+                wm_bypass_comp,
+                xlib::XA_CARDINAL,
+                32,
+                xlib::PropModeReplace,
+                (&value as *const u64) as *const u8,
+                1,
+            );
+
             (self.instance.XMapWindow)(self.display, xwindow);
             /*
             let gl = unsafe { GlFns::load_from(&|p| SDL_GL_GetProcAddress(p) as _).unwrap() };
             */
 
+            /*
             unsafe {
                 //gl::Viewport(0, 0, 100, 100);
                 //gl::ClearColor(0.2, 0.3, 0.3, 0.2);
@@ -336,42 +375,89 @@ impl OverlayImpl {
                     std::ptr::null_mut(),
                 );
             }
+            */
+            let window = three_d::window::Window::from_winit_window(
+                orig_window,
+                event_loop,
+                Default::default(),
+                false,
+            )
+            .unwrap();
 
-            while !realwindow.should_close() {
-                // events
-                // -----
-                // process_events(&mut window, &events);
+            let context = window.gl();
+            pub const TRANSPARENCY: Blend = Blend::Enabled {
+                source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
+                source_alpha_multiplier: BlendMultiplierType::SrcAlpha,
+                destination_rgb_multiplier: BlendMultiplierType::Zero,
+                destination_alpha_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+                rgb_equation: BlendEquationType::Min,
+                alpha_equation: BlendEquationType::Add,
+            };
+            context.set_blend(TRANSPARENCY);
 
-                // render
-                // ------
-                unsafe {
-                    gl::Viewport(0, 0, 100, 100);
+            let scale_factor = 1.5;
+            let (width, height) = (100, 300);
 
-                    gl::Enable(gl::BLEND);
-                    gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-                    gl::ClearColor(0.0, 0.3, 0.3, 0.5);
-                    gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            use three_d::*;
+            let mut rectangle = Gm::new(
+                Rectangle::new(
+                    &context,
+                    vec2(200.0, 200.0) * scale_factor,
+                    degrees(45.0),
+                    100.0 * scale_factor,
+                    200.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::RED,
+                    ..Default::default()
+                },
+            );
+            let mut circle = Gm::new(
+                Circle::new(
+                    &context,
+                    vec2(500.0, 500.0) * scale_factor,
+                    200.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::BLUE,
+                    ..Default::default()
+                },
+            );
+            let mut line = Gm::new(
+                Line::new(
+                    &context,
+                    vec2(0.0, 0.0) * scale_factor,
+                    vec2(width as f32, height as f32) * scale_factor,
+                    5.0 * scale_factor,
+                ),
+                ColorMaterial {
+                    color: Srgba::GREEN,
+                    ..Default::default()
+                },
+            );
 
-                    // draw our first triangle
-                    // gl::UseProgram(shaderProgram);
-                    // gl::BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-                    gl::DrawArrays(gl::TRIANGLES, 0, 3);
-                    // glBindVertexArray(0); // no need to unbind it every time
-                }
+            let callback = move |inp: FrameInput| -> FrameOutput {
+                inp.screen()
+                    .clear(three_d::ClearState::color_and_depth(
+                        0.8, 0.8, 0.8, 0.3, 1.0,
+                    ))
+                    .render(
+                        three_d::Camera::new_2d(inp.viewport),
+                        line.into_iter().chain(&rectangle).chain(&circle),
+                        &[],
+                    );
 
-                // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-                // -------------------------------------------------------------------------------
-                realwindow.swap_buffers();
-                //(self.glx.glXSwapBuffers)(self.display, glxwindow as u64);
-                glfw.poll_events();
-            }
+                three_d::FrameOutput::default()
+            };
+            window.render_loop(callback);
 
-            let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
-            self.window = Some(window);
+            panic!();
+            // let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
+            // self.window = Some(window);
             // self.visual_info = Some(visual_info);
             self.screen = Some(screen);
             // self.default_visual = Some(default_visual);
-            self.gc = Some(gc);
+            // self.gc = Some(gc);
         }
         Ok(())
     }
