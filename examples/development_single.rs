@@ -53,6 +53,8 @@ pub fn main() -> std::result::Result<(), Error> {
         )
         .expect("texture draw failed");
 
+    #[cfg(target_os = "linux")]
+    twindow.render();
     /*
         let i = 300;
         let pos = Rect::from(200.0 + 50.0 * (i % 5) as f32, 200.0).sized(200.0, 300.0);

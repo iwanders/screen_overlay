@@ -181,6 +181,12 @@ impl Overlay {
             })
         }
     }
+
+    #[cfg(target_os = "linux")]
+    pub fn render(&self) {
+        let mut wlock = self.overlay.lock();
+        wlock.render();
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

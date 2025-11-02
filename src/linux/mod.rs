@@ -29,19 +29,21 @@ use std::collections::HashMap;
 use three_d::Context as Context3D;
 use three_d::{CpuTexture, Viewport};
 
-#[derive(Copy, Clone, Debug)]
-struct TextureTarget(u32);
-
-struct DrawId(u64);
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+struct DrawId(usize);
 struct DrawTexture {
-    position: Point,
-    texture: ImageTexture,
-    texture_region: Rect,
-    color: Color,
-    alpha: f32,
+    rectangle: three_d::Rectangle,
+    material: three_d::ColorMaterial,
+}
+
+impl std::fmt::Debug for DrawTexture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "DrawTexture")
+    }
 }
 
 type ComponentState = Arc<RwLock<DrawComponents>>;
+#[derive(Debug)]
 struct DrawComponents {
     textures: HashMap<DrawId, DrawTexture>,
     id_counter: usize,
@@ -53,6 +55,25 @@ impl DrawComponents {
             id_counter: 0,
         })
         .into()
+    }
+    fn add_draw_texture(&mut self, draw_texture: DrawTexture) -> DrawId {
+        let id = DrawId(self.id_counter);
+        self.id_counter += 1;
+        self.textures.insert(id, draw_texture);
+        id
+    }
+    fn remove_id(&mut self, id: DrawId) {
+        let _ = self.textures.remove(&id);
+    }
+
+    fn sprites(&self) -> Vec<three_d::Gm<&three_d::Rectangle, &three_d::ColorMaterial>> {
+        self.textures
+            .iter()
+            .map(|(_, dt)| three_d::Gm {
+                geometry: &dt.rectangle,
+                material: &dt.material,
+            })
+            .collect()
     }
 }
 
@@ -138,22 +159,20 @@ extern "C" fn error_handler(display: *mut Display, event: *mut XErrorEvent) -> i
 // pub type IDVisual = usize;
 #[derive(Clone, Debug)]
 pub enum IDVisual {
-    Text { xft_draw: *mut xft::XftDraw },
-    Image {},
+    DrawId {
+        id: DrawId,
+        components: ComponentState,
+    },
     None,
 }
 impl Drop for IDVisual {
     fn drop(&mut self) {
         unsafe {
             match self {
-                IDVisual::Text { xft_draw } => {
-                    let xft = xft::Xft::open();
-                    if xft.is_err() {
-                        return; // how can we handle this? return of drop is void.
-                    }
-                    let font = (xft.unwrap().XftDrawDestroy)(*xft_draw);
+                IDVisual::DrawId { id, components } => {
+                    let mut l = components.write();
+                    l.remove_id(*id);
                 }
-                IDVisual::Image {} => {}
                 IDVisual::None => {}
             }
         }
@@ -245,7 +264,7 @@ impl OverlayImpl {
             let glfw = &mut self.glfw;
             glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
             glfw.window_hint(glfw::WindowHint::OpenGlProfile(
-                glfw::OpenGlProfileHint::Compat,
+                glfw::OpenGlProfileHint::Core,
             ));
             glfw.window_hint(glfw::WindowHint::Decorated(false));
             glfw.window_hint(glfw::WindowHint::FocusOnShow(false));
@@ -389,6 +408,16 @@ impl OverlayImpl {
                 height: root_height as u32,
             };
             context.set_viewport(viewport);
+            // context.set_blend(three_d::Blend::TRANSPARENCY);
+            use three_d::{BlendEquationType, BlendMultiplierType};
+            context.set_blend(three_d::Blend::Enabled {
+                source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
+                source_alpha_multiplier: BlendMultiplierType::One,
+                destination_rgb_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+                destination_alpha_multiplier: BlendMultiplierType::SrcAlpha,
+                rgb_equation: BlendEquationType::Add,
+                alpha_equation: BlendEquationType::Add,
+            });
 
             /*
             unsafe {
@@ -447,7 +476,7 @@ impl OverlayImpl {
             self.context = Some(context);
             self.viewport = Some(viewport);
 
-            self.test_three_d();
+            // self.test_three_d();
         }
         Ok(())
     }
@@ -594,8 +623,42 @@ impl OverlayImpl {
         color: &Color,
         alpha: f32,
     ) -> Result<IDVisual, Error> {
-        self.test_three_d();
-        return Ok(IDVisual::None);
+        let context = self.context.as_ref().unwrap();
+
+        let material = three_d::ColorMaterial {
+            color: three_d::Srgba::WHITE,
+            texture: Some(three_d::Texture2DRef::from_cpu_texture(
+                &context,
+                &texture.texture,
+            )),
+            is_transparent: false,
+            ..Default::default()
+        };
+        println!("position: {:?}", position);
+
+        let rectangle = three_d::Rectangle::new(
+            &context,
+            three_d::vec2(position.x, position.y),
+            three_d::degrees(0.0),
+            texture.texture.width as f32,
+            texture.texture.height as f32,
+        );
+
+        let dt = DrawTexture {
+            material,
+            rectangle,
+        };
+
+        let id = {
+            let mut l = self.components.write();
+            (*l).add_draw_texture(dt)
+        };
+        // self.render();
+
+        Ok(IDVisual::DrawId {
+            id,
+            components: self.components.clone(),
+        })
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
@@ -649,7 +712,7 @@ impl OverlayImpl {
             );
             RenderTarget::screen(&context, viewport.width, viewport.height)
                 // .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
-                .clear(ClearState::none())
+                // .clear(ClearState::none())
                 .render(
                     Camera::new_2d(viewport),
                     line.into_iter().chain(&rectangle).chain(&circle),
@@ -658,6 +721,43 @@ impl OverlayImpl {
 
             self.window.as_mut().unwrap().swap_buffers();
         }
+    }
+
+    pub fn render(&mut self) {
+        let context = self.context.as_ref().unwrap();
+        let size = self.window_size.as_ref().unwrap();
+        let viewport = *self.viewport.as_ref().unwrap();
+        let c = self.components.read();
+        let axes = three_d::Axes::new(&context, 5.0, 100.0);
+        let ambient = three_d::AmbientLight::new(&context, 1.0, three_d::Srgba::WHITE);
+        let mut line = {
+            use three_d::*;
+            Gm::new(
+                Line::new(
+                    &context,
+                    vec2(0.0, 0.0),
+                    vec2(viewport.width as f32 / 2.0, viewport.height as f32),
+                    5.0,
+                ),
+                ColorMaterial {
+                    color: Srgba::GREEN,
+                    ..Default::default()
+                },
+            )
+        };
+        three_d::RenderTarget::screen(&context, viewport.width, viewport.height)
+            // .clear(three_d::ClearState::color_and_depth(  0.8, 0.8, 0.8, 0.1, 1.0, ))
+            // .clear(three_d::ClearState::color_and_depth(  0.8, 0.8, 0.8, 0.1, 1.0, ))
+            .clear(three_d::ClearState::none())
+            .render(
+                three_d::Camera::new_2d(viewport),
+                axes.into_iter()
+                    .chain(c.sprites().iter().map(|z| z as &dyn three_d::Object))
+                    .chain(&line),
+                &[&ambient],
+            );
+
+        self.window.as_mut().unwrap().swap_buffers();
     }
 }
 
