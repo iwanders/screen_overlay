@@ -17,10 +17,10 @@ use crate::{
  and rendering.
 */
 
+use glfw::PWindow;
+use std::sync::Arc;
 use x11_dl::xlib::{self, Display, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib, GC};
 use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
-
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ImageTexture {
@@ -111,7 +111,7 @@ extern "C" fn error_handler(display: *mut Display, event: *mut XErrorEvent) -> i
 #[derive(Clone, Debug)]
 pub enum IDVisual {
     Text { xft_draw: *mut xft::XftDraw },
-    Image { gc: GC, display: *mut Display },
+    Image {},
     None,
 }
 impl Drop for IDVisual {
@@ -125,11 +125,7 @@ impl Drop for IDVisual {
                     }
                     let font = (xft.unwrap().XftDrawDestroy)(*xft_draw);
                 }
-                IDVisual::Image { gc, display } => {
-                    println!("Clearing image");
-                    let instance = xlib::Xlib::open().unwrap();
-                    (instance.XFreeGC)(*display, *gc);
-                }
+                IDVisual::Image {} => {}
                 IDVisual::None => {}
             }
         }
@@ -150,11 +146,13 @@ pub struct OverlayImpl {
     xrender: Xrender,
     glx: x11_dl::glx::Glx,
     display: *mut Display,
-    default_visual: Option<*mut Visual>,
+    // default_visual: Option<*mut Visual>,
     screen: Option<i32>,
-    window: Option<u64>,
-    visual_info: Option<xlib::XVisualInfo>,
-    gc: Option<GC>,
+    // window: Option<u64>,
+    // visual_info: Option<xlib::XVisualInfo>,
+    // gc: Option<GC>,
+    window: Option<PWindow>,
+    window_size: Option<Rect>,
 }
 unsafe impl Send for OverlayImpl {}
 
@@ -179,9 +177,7 @@ impl OverlayImpl {
             display,
             screen: None,
             window: None,
-            visual_info: None,
-            default_visual: None,
-            gc: None,
+            window_size: None,
         })
     }
 
@@ -190,8 +186,20 @@ impl OverlayImpl {
             let screen = (self.instance.XDefaultScreen)(self.display);
             let root_window = (self.instance.XDefaultRootWindow)(self.display);
 
+            let mut attributes: xlib::XWindowAttributes =
+                std::mem::MaybeUninit::zeroed().assume_init();
+            let status =
+                (self.instance.XGetWindowAttributes)(self.display, root_window, &mut attributes);
+            if status != 1 {
+                return Err("failed to retrieve root window attributes".into());
+            }
+            // println!("attributes: {attributes:?}");
+            // This doesn't do too much, we fix it later after doing the x11 setup.
+            let root_width = attributes.width;
+            let root_height = attributes.height;
             let x = 0;
             let y = 0;
+            let window_size = Rect::from(0.0, 0.0).sized(root_width as f32, root_height as f32);
 
             use glfw::fail_on_errors;
             let mut glfw = glfw::init(fail_on_errors!()).unwrap();
@@ -215,9 +223,13 @@ impl OverlayImpl {
             glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
             // Create a windowed mode window and its OpenGL context
             let (mut window, events) = glfw
-                .create_window(300, 300, "Hello this is window", glfw::WindowMode::Windowed)
+                .create_window(
+                    root_width as u32,
+                    root_height as u32,
+                    "Hello this is window",
+                    glfw::WindowMode::Windowed,
+                )
                 .expect("Failed to create GLFW window.");
-
             let xwindow = window.get_x11_window() as u64;
             let glxwindow = window.get_glx_context();
             // int XChangeWindowAttributes(Display *display, Window w, unsigned long valuemask, XSetWindowAttributes *attributes);
@@ -312,10 +324,9 @@ impl OverlayImpl {
                 0,
             );
 
+            realwindow.set_pos(x, y);
+            realwindow.set_size(root_width as i32, root_height as i32);
             (self.instance.XMapWindow)(self.display, xwindow);
-            /*
-            let gl = unsafe { GlFns::load_from(&|p| SDL_GL_GetProcAddress(p) as _).unwrap() };
-            */
 
             unsafe {
                 //gl::Viewport(0, 0, 100, 100);
@@ -349,9 +360,8 @@ impl OverlayImpl {
 
                     gl::Enable(gl::BLEND);
                     gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-                    gl::ClearColor(0.0, 0.3, 0.3, 0.5);
+                    gl::ClearColor(0.0, 0.0, 0.3, 0.2);
                     gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-
                     // draw our first triangle
                     // gl::UseProgram(shaderProgram);
                     // gl::BindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
@@ -366,12 +376,11 @@ impl OverlayImpl {
                 glfw.poll_events();
             }
 
-            let gc = (self.instance.XCreateGC)(self.display, window, 0, std::ptr::null_mut());
-            self.window = Some(window);
+            self.window = Some(realwindow);
             // self.visual_info = Some(visual_info);
             self.screen = Some(screen);
             // self.default_visual = Some(default_visual);
-            self.gc = Some(gc);
+            self.window_size = Some(window_size);
         }
         Ok(())
     }
@@ -390,7 +399,7 @@ impl OverlayImpl {
     }
 
     pub fn prepare_font(&mut self, properties: &TextProperties) -> Result<PreparedFont, Error> {
-        unsafe {
+        /*unsafe {
             let xft = xft::Xft::open()?;
             let font_descriptor =
                 format!("{}:pixelsize={}", properties.font, properties.size as i32);
@@ -406,7 +415,8 @@ impl OverlayImpl {
                 display: self.display,
                 font,
             })
-        }
+        }*/
+        todo!()
     }
 
     pub fn draw_text(
@@ -417,6 +427,7 @@ impl OverlayImpl {
         font: &PreparedFont,
     ) -> Result<IDVisual, Error> {
         // println!("would print {text}");
+        /*
         unsafe {
             let xft = xft::Xft::open()?;
             let screen = *self
@@ -473,6 +484,8 @@ impl OverlayImpl {
             // XftDrawDestroy XftColorFree!
             Ok(IDVisual::Text { xft_draw })
         }
+        */
+        todo!();
     }
 
     pub fn load_texture<P: AsRef<std::path::Path>>(
@@ -483,6 +496,7 @@ impl OverlayImpl {
             pm: 0,
             display: self.display,
         });
+        /*
         // This loads the image to a pixmap, that we can utilise later.
         let mut img = image::ImageReader::open(path)?.decode()?.to_rgba8();
         img.save("/tmp/foo.png").unwrap();
@@ -574,6 +588,7 @@ impl OverlayImpl {
             pm,
             display: self.display,
         })
+        */
     }
 
     pub fn draw_texture(
@@ -584,13 +599,10 @@ impl OverlayImpl {
         color: &Color,
         alpha: f32,
     ) -> Result<IDVisual, Error> {
-        let drawable = self.window.unwrap();
-        let gc = self.gc.unwrap();
-        return Ok(IDVisual::Image {
-            gc,
-            display: self.display,
-        });
-
+        // let drawable = self.window.unwrap();
+        // let gc = self.gc.unwrap();
+        return Ok(IDVisual::Image {});
+        /*
         println!("gc: {:?}", gc);
 
         // Do we first have to create an XRenderCreatePicture?
@@ -713,6 +725,8 @@ impl OverlayImpl {
             gc,
             display: self.display,
         })
+        */
+        todo!()
     }
 
     pub fn remove_visual(&mut self, visual: &IDVisual) -> Result<(), Error> {
