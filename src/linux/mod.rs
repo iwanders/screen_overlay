@@ -391,6 +391,7 @@ impl OverlayImpl {
             unsafe {
                 // ------
                 gl::Viewport(0, 0, root_width, root_height);
+
                 // gl::Enable(gl::BLEND);
                 // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
                 // gl::ClearColor(0.0, 0.0, 0.3, 0.2);
@@ -408,16 +409,16 @@ impl OverlayImpl {
                 height: root_height as u32,
             };
             context.set_viewport(viewport);
-            // context.set_blend(three_d::Blend::TRANSPARENCY);
-            use three_d::{BlendEquationType, BlendMultiplierType};
-            context.set_blend(three_d::Blend::Enabled {
-                source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
-                source_alpha_multiplier: BlendMultiplierType::One,
-                destination_rgb_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
-                destination_alpha_multiplier: BlendMultiplierType::SrcAlpha,
-                rgb_equation: BlendEquationType::Add,
-                alpha_equation: BlendEquationType::Add,
-            });
+            context.set_blend(three_d::Blend::TRANSPARENCY);
+            // use three_d::{BlendEquationType, BlendMultiplierType};
+            // context.set_blend(three_d::Blend::Enabled {
+            //     source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
+            //     source_alpha_multiplier: BlendMultiplierType::SrcAlpha,
+            //     destination_rgb_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+            //     destination_alpha_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+            //     rgb_equation: BlendEquationType::Add,
+            //     alpha_equation: BlendEquationType::Add,
+            // });
 
             /*
             unsafe {
@@ -631,10 +632,16 @@ impl OverlayImpl {
                 &context,
                 &texture.texture,
             )),
-            is_transparent: false,
+            is_transparent: true,
             ..Default::default()
         };
         println!("position: {:?}", position);
+
+        let v: three_d::CpuMaterial = three_d::CpuMaterial {
+            albedo_texture: Some(texture.texture.clone()),
+            ..Default::default()
+        };
+        let material = three_d::ColorMaterial::new_transparent(&context, &v);
 
         let rectangle = three_d::Rectangle::new(
             &context,
@@ -745,9 +752,28 @@ impl OverlayImpl {
                 },
             )
         };
+
+        use three_d::{BlendEquationType, BlendMultiplierType};
+        let blender = three_d::Blend::Enabled {
+            source_rgb_multiplier: BlendMultiplierType::SrcAlpha,
+            source_alpha_multiplier: BlendMultiplierType::SrcAlpha,
+            destination_rgb_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+            destination_alpha_multiplier: BlendMultiplierType::OneMinusSrcAlpha,
+            rgb_equation: BlendEquationType::Add,
+            alpha_equation: BlendEquationType::Add,
+        };
+        context.set_render_states(three_d::RenderStates {
+            write_mask: three_d::WriteMask::COLOR_AND_DEPTH,
+            depth_test: Default::default(),
+            blend: blender,
+            cull: Default::default(),
+        });
+
         three_d::RenderTarget::screen(&context, viewport.width, viewport.height)
             // .clear(three_d::ClearState::color_and_depth(  0.8, 0.8, 0.8, 0.1, 1.0, ))
-            // .clear(three_d::ClearState::color_and_depth(  0.8, 0.8, 0.8, 0.1, 1.0, ))
+            .clear(three_d::ClearState::color_and_depth(
+                0.0, 0.0, 0.0, 0.0, 1.0,
+            ))
             .clear(three_d::ClearState::none())
             .render(
                 three_d::Camera::new_2d(viewport),
