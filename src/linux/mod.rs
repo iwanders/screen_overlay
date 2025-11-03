@@ -600,7 +600,6 @@ impl OverlayImpl {
             .map(|z| [z[0], z[1], z[2], z[3]])
             .collect();
         let mut data = three_d::core::texture::TextureData::RgbaU8(d);
-        data.to_linear_srgb();
 
         let texture = three_d::core::texture::CpuTexture {
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
