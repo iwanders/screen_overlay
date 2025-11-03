@@ -626,22 +626,38 @@ impl OverlayImpl {
     ) -> Result<IDVisual, Error> {
         let context = self.context.as_ref().unwrap();
 
-        let material = three_d::ColorMaterial {
-            color: three_d::Srgba::WHITE,
-            texture: Some(three_d::Texture2DRef::from_cpu_texture(
-                &context,
-                &texture.texture,
-            )),
-            is_transparent: true,
-            ..Default::default()
-        };
-        println!("position: {:?}", position);
+        const USE_BAD: bool = false;
+        let material = if USE_BAD {
+            three_d::ColorMaterial {
+                color: three_d::Srgba::WHITE,
+                texture: Some(three_d::Texture2DRef::from_cpu_texture(
+                    &context,
+                    &texture.texture,
+                )),
+                is_transparent: true,
 
-        let v: three_d::CpuMaterial = three_d::CpuMaterial {
-            albedo_texture: Some(texture.texture.clone()),
-            ..Default::default()
+                /*
+                render_states: three_d::RenderStates {
+                    write_mask: three_d::WriteMask::COLOR,
+                    blend: three_d::Blend::TRANSPARENCY,
+                    ..Default::default()
+                },
+                 */
+                ..Default::default()
+            }
+        } else {
+            let v: three_d::CpuMaterial = three_d::CpuMaterial {
+                albedo_texture: Some(texture.texture.clone()),
+                ..Default::default()
+            };
+            let mut x = three_d::ColorMaterial::new_transparent(&context, &v);
+            x.render_states = three_d::RenderStates {
+                write_mask: three_d::WriteMask::COLOR,
+                blend: three_d::Blend::STANDARD_TRANSPARENCY,
+                ..Default::default()
+            };
+            x
         };
-        let material = three_d::ColorMaterial::new_transparent(&context, &v);
 
         let rectangle = three_d::Rectangle::new(
             &context,
