@@ -802,7 +802,8 @@ impl OverlayImpl {
     }
 }
 
-pub fn run_msg_loop() -> Result<(), Error> {
+type OurApplicationType = ();
+pub fn run_msg_loop(app: OurApplicationType) -> Result<(), Error> {
     unsafe {
         let instance = xlib::Xlib::open()?;
         let display = (instance.XOpenDisplay)(std::ptr::null());
@@ -812,6 +813,6 @@ pub fn run_msg_loop() -> Result<(), Error> {
     Ok(())
 }
 
-pub fn setup() -> Result<(), Error> {
+pub fn setup() -> Result<OurApplicationType, Error> {
     Ok(())
 }

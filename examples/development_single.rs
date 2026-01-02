@@ -15,7 +15,7 @@ use screen_overlay::{
 };
 
 pub fn main() -> std::result::Result<(), Error> {
-    screen_overlay::setup()?;
+    let v = screen_overlay::setup()?;
     let window = Overlay::new_with_config(&OverlayConfig {
         name: "Awesome Overlay".to_owned(),
         ..Default::default()
@@ -128,7 +128,7 @@ pub fn main() -> std::result::Result<(), Error> {
             v
         };
     */
-    Ok(screen_overlay::block_and_loop()?)
+    Ok(screen_overlay::block_and_loop(v)?)
 
     // Ok(())
 }

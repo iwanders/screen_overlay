@@ -51,3 +51,10 @@ glfw = "0.60.0"
 gl = "0.14.0"
 parking_lot = "0.12.5"
 three-d = "0.18.2"
+
+# Winit backend attempt
+winit = "0.30.12"
+eframe = "0.33.3"
+egui  = "0.33.3"
+egui_extras = {version="0.33.3", features=["image"]}
+env_logger = "0.11.8"
