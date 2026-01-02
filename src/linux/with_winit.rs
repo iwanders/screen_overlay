@@ -160,6 +160,9 @@ pub fn setup() -> Result<OurApplicationType, Error> {
 
 // Based on discussion from here, since that did pretty much waht I wanted.
 // https://github.com/emilk/egui/issues/4451
+//
+// Hmm, for images... something something dpi?
+// https://github.com/emilk/egui/discussions/4948
 mod standalone_test {
     #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
     #![allow(rustdoc::missing_crate_level_docs)] // it's an example
@@ -170,14 +173,17 @@ mod standalone_test {
         env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([120.0, 880.0])
+                .with_inner_size([1920.0, 1080.0]) // This doesn't seem to be pixel coordinates?
+                .with_resizable(false)
+                .with_fullscreen(true)
+                .with_maximized(true)
                 .with_transparent(true)
                 .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
                 .with_always_on_top()
                 .with_decorations(false)
                 .with_titlebar_shown(false)
-                .with_taskbar(false)
                 .with_window_type(egui::X11WindowType::Utility),
+            event_loop_builder: None,
             ..Default::default()
         };
         eframe::run_native(
@@ -197,6 +203,15 @@ mod standalone_test {
     impl eframe::App for MyApp {
         // fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+            println!("available_width: {}", ui.available_width());
+            println!("available_height: {}", ui.available_height());
+            println!("available_size: {:?}", ui.available_size());
+            println!("pixels_per_point: {}", ui.pixels_per_point());
+            // pixels per point is 0.953, which aligns with:
+            // >>> 1832 / 1920
+            // 0.9541666666666667
+            // Which is why our window size doesn't cover the entire monitor :<
+
             // ctx.send_viewport_cmd(ViewportCommand::Transparent(true));
             // ctx.send_viewport_cmd(ViewportCommand::Decorations(false));
             // Mouse pass through doesn't work...
@@ -207,8 +222,8 @@ mod standalone_test {
             // always on top works.
             ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
             egui::CentralPanel::default()
-                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
-                .show(ctx, |ui| {
+                // .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+                .show_inside(ui, |ui| {
                     egui::ScrollArea::both().show(ui, |ui| {
                         ui.image(egui::include_image!("../../examples/crosshair_image.png"))
                             .on_hover_text_at_pointer("WebP");
