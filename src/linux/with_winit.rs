@@ -172,10 +172,12 @@ mod standalone_test {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([120.0, 880.0])
                 .with_transparent(true)
-                .with_mouse_passthrough(true)
-                .with_decorations(false)
+                .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
                 .with_always_on_top()
-                .with_titlebar_shown(false),
+                .with_decorations(false)
+                .with_titlebar_shown(false)
+                .with_taskbar(false)
+                .with_window_type(egui::X11WindowType::Utility),
             ..Default::default()
         };
         eframe::run_native(
@@ -193,11 +195,14 @@ mod standalone_test {
     pub struct MyApp {}
 
     impl eframe::App for MyApp {
-        fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
             // ctx.send_viewport_cmd(ViewportCommand::Transparent(true));
             // ctx.send_viewport_cmd(ViewportCommand::Decorations(false));
             // Mouse pass through doesn't work...
             // https://docs.rs/winit/latest/winit/window/struct.Window.html#method.set_cursor_hittest should be possible.
+            let ctx = ui.ctx();
+            // This is necessary to actually make it click through, perhaps fixed by https://github.com/rust-windowing/winit/pull/4416
             ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
             // always on top works.
             ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
@@ -207,6 +212,11 @@ mod standalone_test {
                     egui::ScrollArea::both().show(ui, |ui| {
                         ui.image(egui::include_image!("../../examples/crosshair_image.png"))
                             .on_hover_text_at_pointer("WebP");
+
+                        ui.image(egui::include_image!(
+                            "../../PNG_transparency_demonstration_1.png"
+                        ))
+                        .on_hover_text_at_pointer("WebP");
                         /*ui.image(egui::include_image!("cat.webp"))
                             .on_hover_text_at_pointer("WebP");
                         ui.image(egui::include_image!("ferris.gif"))

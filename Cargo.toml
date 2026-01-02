@@ -53,8 +53,18 @@ parking_lot = "0.12.5"
 three-d = "0.18.2"
 
 # Winit backend attempt
+log = "0.4"
 winit = "0.30.12"
-eframe = "0.33.3"
-egui  = "0.33.3"
-egui_extras = {version="0.33.3", features=["image"]}
+#eframe = {version="0.33.3"}
+#egui  = "0.33.3"
+#egui_extras = {version="0.33.3", features=["image"]}
 env_logger = "0.11.8"
+
+#eframe = {version="0.33.3", path="../egui/crates/eframe/"}
+#egui = {version="0.33.3", path="../egui/crates/egui/"}
+#egui_extras = {version="0.33.3", path="../egui/crates/egui_extras/", features=["image"]}
+
+# Latest head has a fix for the passthrough hit test.
+eframe = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b"}
+egui = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b"}
+egui_extras = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b",  features=["image"]}
