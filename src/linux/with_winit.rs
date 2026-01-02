@@ -183,7 +183,6 @@ mod standalone_test {
                 .with_decorations(false)
                 .with_titlebar_shown(false)
                 .with_window_type(egui::X11WindowType::Utility),
-            event_loop_builder: None,
             ..Default::default()
         };
         eframe::run_native(
@@ -203,10 +202,10 @@ mod standalone_test {
     impl eframe::App for MyApp {
         // fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-            println!("available_width: {}", ui.available_width());
-            println!("available_height: {}", ui.available_height());
-            println!("available_size: {:?}", ui.available_size());
-            println!("pixels_per_point: {}", ui.pixels_per_point());
+            // println!("available_width: {}", ui.available_width());
+            // println!("available_height: {}", ui.available_height());
+            // println!("available_size: {:?}", ui.available_size());
+            // println!("pixels_per_point: {}", ui.pixels_per_point());
             // pixels per point is 0.953, which aligns with:
             // >>> 1832 / 1920
             // 0.9541666666666667
@@ -217,21 +216,30 @@ mod standalone_test {
             // Mouse pass through doesn't work...
             // https://docs.rs/winit/latest/winit/window/struct.Window.html#method.set_cursor_hittest should be possible.
             let ctx = ui.ctx();
+            ctx.set_pixels_per_point(1.0);
+            ctx.send_viewport_cmd(ViewportCommand::InnerSize((1920.0, 1080.0).into()));
             // This is necessary to actually make it click through, perhaps fixed by https://github.com/rust-windowing/winit/pull/4416
             ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
             // always on top works.
             ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+            // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
             egui::CentralPanel::default()
-                // .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
                 .show_inside(ui, |ui| {
+                    egui::Area::new(egui::Id::new("my_area"))
+                        .fixed_pos(egui::pos2(320.0, 320.0))
+                        .default_size(egui::vec2(500.0, 200.0))
+                        .show(ui.ctx(), |ui| {
+                            ui.image(egui::include_image!(
+                                // "../../PNG_transparency_demonstration_1.png"
+                                "../../examples/crosshair_image.png"
+                            ))
+                        });
+                    /*
                     egui::ScrollArea::both().show(ui, |ui| {
-                        ui.image(egui::include_image!("../../examples/crosshair_image.png"))
-                            .on_hover_text_at_pointer("WebP");
+                        // ui.image(egui::include_image!("../../examples/crosshair_image.png"))
+                        //     .on_hover_text_at_pointer("WebP");
 
-                        ui.image(egui::include_image!(
-                            "../../PNG_transparency_demonstration_1.png"
-                        ))
-                        .on_hover_text_at_pointer("WebP");
                         /*ui.image(egui::include_image!("cat.webp"))
                             .on_hover_text_at_pointer("WebP");
                         ui.image(egui::include_image!("ferris.gif"))
@@ -242,7 +250,7 @@ mod standalone_test {
                         ui.add(egui::Image::new(url).corner_radius(10))
                             .on_hover_text_at_pointer(url);
                             */
-                    });
+                    });*/
                 });
         }
         fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
