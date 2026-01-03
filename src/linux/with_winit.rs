@@ -223,9 +223,17 @@ mod standalone_test {
             // always on top works.
             ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
             // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
+            egui::Panel::top("my_panel").show_inside(ui, |ui| {
+                ui.label("Hello World! From `TopBottomPanel`, that must be before `CentralPanel`!");
+            });
             egui::CentralPanel::default()
                 .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
                 .show_inside(ui, |ui| {
+                    egui::Area::new(egui::Id::new("my_areaz"))
+                        .fixed_pos(egui::pos2(300.0, 100.0))
+                        .default_size(egui::vec2(500.0, 200.0))
+                        .kind(egui::UiKind::GenericArea)
+                        .show(ui.ctx(), |ui| ui.label("Normal text"));
                     egui::Area::new(egui::Id::new("my_area"))
                         .fixed_pos(egui::pos2(320.0, 320.0))
                         .default_size(egui::vec2(500.0, 200.0))
