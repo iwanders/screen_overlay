@@ -22,14 +22,14 @@ winit = "0.30.12"
 #egui_extras = {version="0.33.3", features=["image"]}
 env_logger = "0.11.8"
 
-# eframe = {version="0.33.3", path="../egui/crates/eframe/"}
-# egui = {version="0.33.3", path="../egui/crates/egui/"}
-# egui_extras = {version="0.33.3", path="../egui/crates/egui_extras/", features=["image"]}
+eframe = {version="0.33.3", path="../egui/crates/eframe/"}
+egui = {version="0.33.3", path="../egui/crates/egui/"}
+egui_extras = {version="0.33.3", path="../egui/crates/egui_extras/", features=["image"]}
 
 # Latest head has a fix for the passthrough hit test.
-eframe = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b", features=["glow"]}
-egui = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b"}
-egui_extras = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b",  features=["image"]}
+# eframe = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b", features=["glow"]}
+# egui = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b"}
+# egui_extras = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b",  features=["image"]}
 
 
 [target.'cfg(windows)'.dependencies.windows]

@@ -876,6 +876,7 @@ mod standalone_test {
             multisampling: 1,
             // .with_window_type(egui::X11WindowType::Utility),
             renderer: eframe::Renderer::Glow,
+            // Todo; check if this is a simple matter of propagating https://github.com/gfx-rs/wgpu/issues/687
 
             ..Default::default()
         };

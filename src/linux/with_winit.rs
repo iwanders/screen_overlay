@@ -168,6 +168,7 @@ mod standalone_test {
     #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
     use eframe::egui::{self, Color32, ViewportCommand};
+    use winit::{raw_window_handle::HasWindowHandle as _, window};
 
     pub fn main() -> eframe::Result {
         env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -182,6 +183,7 @@ mod standalone_test {
                 .with_always_on_top()
                 .with_decorations(false)
                 .with_titlebar_shown(false)
+                .with_override_redirect(true)
                 .with_window_type(egui::X11WindowType::Utility),
             ..Default::default()
         };
@@ -202,6 +204,8 @@ mod standalone_test {
     impl eframe::App for MyApp {
         // fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+            let window = _frame.window_handle().unwrap();
+
             // println!("available_width: {}", ui.available_width());
             // println!("available_height: {}", ui.available_height());
             // println!("available_size: {:?}", ui.available_size());
@@ -227,7 +231,7 @@ mod standalone_test {
                 ui.label("Hello World! From `TopBottomPanel`, that must be before `CentralPanel`!");
             });
             egui::CentralPanel::default()
-                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+                .frame(egui::Frame::default().fill(Color32::RED))
                 .show_inside(ui, |ui| {
                     egui::Area::new(egui::Id::new("my_areaz"))
                         .fixed_pos(egui::pos2(300.0, 100.0))
