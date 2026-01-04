@@ -176,7 +176,7 @@ mod standalone_test {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([1920.0, 1080.0]) // This doesn't seem to be pixel coordinates?
                 .with_resizable(false)
-                .with_fullscreen(true)
+                // .with_fullscreen(true)
                 .with_maximized(true)
                 .with_transparent(true)
                 .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
@@ -222,16 +222,14 @@ mod standalone_test {
             let ctx = ui.ctx();
             ctx.set_pixels_per_point(1.0);
             ctx.send_viewport_cmd(ViewportCommand::InnerSize((1920.0, 1080.0).into()));
-            // This is necessary to actually make it click through, perhaps fixed by https://github.com/rust-windowing/winit/pull/4416
             ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
-            // always on top works.
             ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
             // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
             egui::Panel::top("my_panel").show_inside(ui, |ui| {
                 ui.label("Hello World! From `TopBottomPanel`, that must be before `CentralPanel`!");
             });
             egui::CentralPanel::default()
-                .frame(egui::Frame::default().fill(Color32::RED))
+                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
                 .show_inside(ui, |ui| {
                     egui::Area::new(egui::Id::new("my_areaz"))
                         .fixed_pos(egui::pos2(300.0, 100.0))

@@ -1,7 +1,7 @@
 [package]
 name = "screen_overlay"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Ivor Wanders <ivor@iwanders.net>"]
 license = "MIT OR Apache-2.0"
 
@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 #array-init = "2.0.0"
-parking_lot = "0.12.3"
+parking_lot = "0.12.5"
 serde =  { version = "1.0", features = ["derive"] }
 image = { version = "0.25.1",  default-features = false, features = ["png"]}
 
@@ -22,14 +22,19 @@ winit = "0.30.12"
 #egui_extras = {version="0.33.3", features=["image"]}
 env_logger = "0.11.8"
 
-eframe = {version="0.33.3", path="../egui/crates/eframe/"}
-egui = {version="0.33.3", path="../egui/crates/egui/"}
-egui_extras = {version="0.33.3", path="../egui/crates/egui_extras/", features=["image"]}
+# eframe = {version="0.33.3", path="../egui/crates/eframe/"}
+# egui = {version="0.33.3", path="../egui/crates/egui/"}
+# egui_extras = {version="0.33.3", path="../egui/crates/egui_extras/", features=["image"]}
 
-# Latest head has a fix for the passthrough hit test.
 # eframe = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b", features=["glow"]}
 # egui = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b"}
 # egui_extras = {git="https://github.com/emilk/egui.git", rev="9e95b9ca50c224077617434707f7bd29bd70938b",  features=["image"]}
+#
+
+# Own fork for with_override_redirect
+eframe = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8", features=["glow"]}
+egui = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8"}
+egui_extras = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8",  features=["image"]}
 
 
 [target.'cfg(windows)'.dependencies.windows]
@@ -68,5 +73,4 @@ features = [
 x11-dl = "2.21"
 glfw = "0.60.0"
 gl = "0.14.0"
-parking_lot = "0.12.5"
 three-d = "0.18.2"
