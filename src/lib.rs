@@ -39,12 +39,7 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 }
 
 use parking_lot::RwLock;
-
-pub trait PositionedWidget: std::fmt::Debug {
-    fn area(&self) -> egui::Area;
-    fn widget(&self) -> Vec<Box<dyn egui::Widget>>;
-}
-
+use std::sync::atomic::Ordering;
 /*
  containers have Container.show(ui, |ui|{}), but they do consume Container.
  widgets have:  fn ui(self, ui: &mut Ui) -> Response;
@@ -56,28 +51,113 @@ pub trait PositionedWidget: std::fmt::Debug {
     communicate to each other well... should we do a 'tree' in the naming?
 */
 
-#[derive(Copy, Clone, Debug)]
+pub trait UiDrawable: std::marker::Send + std::marker::Sync {
+    fn draw(&self, ui: &mut egui::Ui);
+}
+
+pub struct PositionedElements {
+    area: egui::Area,
+    contents: Vec<Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>>,
+}
+
+pub enum Drawable {
+    Draw(Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>),
+    PositionedElements(PositionedElements),
+}
+impl UiDrawable for Drawable {
+    fn draw(&self, ui: &mut egui::Ui) {
+        match self {
+            Drawable::Draw(drawable) => (drawable)(ui),
+            Drawable::PositionedElements(elements) => {
+                let area = elements.area.clone();
+                area.show(ui.ctx(), |ui| {
+                    for e in elements.contents.iter() {
+                        (e)(ui);
+                    }
+                });
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for Drawable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Drawable::Draw(_drawable) => f
+                .debug_struct("Drawable::Draw")
+                .field("drawable", &"UiDrawable")
+                .finish(),
+            Drawable::PositionedElements(elements) => f
+                .debug_struct("Drawable::Elements")
+                .field("area", &elements.area)
+                .field("contents.len()", &elements.contents.len())
+                .finish(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct VisualId(usize);
+
+#[must_use]
 #[derive(Debug)]
+pub struct VisualHandle {
+    visual: VisualId,
+    overlay: std::sync::Arc<Overlay>,
+}
+impl Drop for VisualHandle {
+    fn drop(&mut self) {
+        self.overlay.remove_element(self.visual);
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct Overlay {
-    // elements?
-    elements: std::collections::HashMap<VisualId, Box<dyn PositionedWidget>>,
+    counter: std::sync::atomic::AtomicUsize,
+    elements: RwLock<std::collections::HashMap<VisualId, Drawable>>,
 }
 
 impl Overlay {
-    fn draw(&self, ui: &mut egui::Ui) {}
+    fn draw(&self, ui: &mut egui::Ui) {
+        let z = self.elements.read();
+        for (_k, v) in z.iter() {
+            v.draw(ui)
+        }
+    }
+    pub fn add_element(&self, drawable: Drawable) -> VisualId {
+        let index = VisualId(self.counter.fetch_add(1, Ordering::Relaxed));
+        let mut v = self.elements.write();
+        v.insert(index, drawable);
+        index
+    }
+    fn remove_element(&self, visual: VisualId) {
+        let mut v = self.elements.write();
+        v.remove(&visual);
+    }
+}
+#[derive(Debug, Clone)]
+pub struct OverlayHandle(std::sync::Arc<Overlay>);
+
+impl OverlayHandle {
+    pub fn new() -> OverlayHandle {
+        OverlayHandle(Overlay::default().into())
+    }
+    pub fn add_drawable(&self, drawable: Drawable) -> VisualHandle {
+        let id = self.0.add_element(drawable);
+        VisualHandle {
+            visual: id,
+            overlay: self.0.clone(),
+        }
+    }
 }
 
 fn test_clone(ui: &mut egui::Ui) {
-    let v = vec![egui::widgets::Label::new("foo").fixed_pos(100.0, 30.0)];
+    // let v = vec![egui::widgets::Label::new("foo").fixed_pos(100.0, 30.0)];
     use egui::Widget;
     // v[0].ui(ui); // no copy on Label
     // let a = v[0].clone(); // no clone on Label :/
     // Should probably just make a WidgetFactory?
 }
-
-#[derive(Debug, Clone)]
-pub struct OverlayHandle(std::sync::Arc<Overlay>);
 
 pub fn main_test() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -86,6 +166,47 @@ pub fn main_test() -> eframe::Result {
         height: 1080,
     };
     let options = fullscreen_overlay_native_options(&config);
+
+    let overlay = OverlayHandle::new();
+    let overlay_for_runner = overlay.clone();
+    let handle = std::thread::spawn(move || {
+        let overlay = overlay_for_runner;
+
+        let token = overlay.add_drawable(Drawable::Draw(Box::new(|ui| {
+            egui::Panel::top("my_panel").show_inside(ui, |ui| {
+                ui.label("Hello World! From `TopBottomPanel`, that must be before `CentralPanel`!");
+            });
+        })));
+
+        let our_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let our_counter_draw = our_counter.clone();
+
+        let token2 = overlay.add_drawable(Drawable::Draw(Box::new(move |ui| {
+            let value = our_counter_draw.load(Ordering::Relaxed);
+            let ratio = (value % 10) as f32 / 10.0;
+            egui::CentralPanel::default()
+                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+                .show_inside(ui, |ui| {
+                    egui::Area::new(egui::Id::new("my_value"))
+                        .fixed_pos(egui::pos2(300.0, 100.0))
+                        .default_size(egui::vec2(500.0, 200.0))
+                        .kind(egui::UiKind::GenericArea)
+                        .show(ui.ctx(), |ui| ui.label(format!("{}", value)));
+                    egui::Area::new(egui::Id::new("my_progressbar"))
+                        .fixed_pos(egui::pos2(300.0, 200.0))
+                        .default_size(egui::vec2(50.0, 200.0))
+                        .show(ui.ctx(), |ui| {
+                            ui.add(egui::widgets::ProgressBar::new(ratio))
+                        });
+                });
+        })));
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            // Do nothing, just wait
+            our_counter.fetch_add(1, Ordering::Relaxed);
+        }
+    });
     eframe::run_native(
         "Image Viewer",
         options,
@@ -95,6 +216,7 @@ pub fn main_test() -> eframe::Result {
             Ok(Box::new(TestOverlayApp {
                 config,
                 counter: 0.0,
+                overlay,
             }))
         }),
     )
@@ -103,7 +225,7 @@ pub fn main_test() -> eframe::Result {
 struct TestOverlayApp {
     config: OverlayConfig,
     counter: f32,
-    // overlay: OverlayHandle,
+    overlay: OverlayHandle,
 }
 
 impl eframe::App for TestOverlayApp {
@@ -111,8 +233,10 @@ impl eframe::App for TestOverlayApp {
         let ctx = ui.ctx();
         fullscreen_overlay_configure(ctx, &self.config);
         // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
-        //
 
+        self.overlay.0.draw(ui);
+
+        /*
         let pos = egui::pos2(1920.0 / 2.0 - 100.0, 1080.0 / 2.0 - 100.0);
         self.counter = self.counter.rem_euclid(1.0) + 0.005;
 
@@ -143,6 +267,7 @@ impl eframe::App for TestOverlayApp {
                         ui.add(egui::widgets::ProgressBar::new(self.counter))
                     });
             });
+            */
     }
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         egui::Rgba::TRANSPARENT.to_array()
