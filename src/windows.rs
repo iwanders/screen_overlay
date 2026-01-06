@@ -1,5 +1,4 @@
 use windows::{
-    core::*,
     Foundation::Numerics::*,
     Win32::{
         Foundation::*,
@@ -21,6 +20,7 @@ use windows::{
         // UI::Shell::*,
         UI::WindowsAndMessaging::*,
     },
+    core::*,
 };
 /*
     - There's currently a bug when main window changes between monitors, the overlay freezes?
@@ -152,7 +152,7 @@ pub struct OverlayImpl {
 // Is this legal?
 unsafe impl Send for OverlayImpl {}
 
-pub fn run_msg_loopz() -> Result<()> {
+pub fn run_msg_loop() -> Result<()> {
     unsafe {
         let mut message = MSG::default();
         while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
@@ -767,7 +767,7 @@ fn create_surface(
     }
 }
 
-pub fn setupz() -> Result<()> {
+pub fn setup() -> Result<()> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
     }
@@ -820,7 +820,7 @@ impl winit::application::ApplicationHandler for AppHandle {
 
 type OurApplicationType = ApplicationWrapper;
 
-pub fn run_msg_loop(wrapper: OurApplicationType) -> std::result::Result<(), Error> {
+pub fn run_msg_loop_winit(wrapper: OurApplicationType) -> std::result::Result<(), Error> {
     let ApplicationWrapper {
         mut app,
         event_loop,
@@ -830,7 +830,7 @@ pub fn run_msg_loop(wrapper: OurApplicationType) -> std::result::Result<(), Erro
     Ok(())
 }
 
-pub fn setup() -> std::result::Result<OurApplicationType, Error> {
+pub fn setup_winit() -> std::result::Result<OurApplicationType, Error> {
     standalone_test::main();
 
     let event_loop = EventLoop::new().unwrap();
@@ -877,7 +877,6 @@ mod standalone_test {
             // .with_window_type(egui::X11WindowType::Utility),
             renderer: eframe::Renderer::Glow,
             // Todo; check if this is a simple matter of propagating https://github.com/gfx-rs/wgpu/issues/687
-
             ..Default::default()
         };
         eframe::run_native(
