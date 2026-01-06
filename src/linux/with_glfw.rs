@@ -1,5 +1,5 @@
 #![allow(unused_variables, unused_imports, unreachable_code)]
-use crate::{
+use crate::legacy::{
     CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, Error, GeometryElement, LineJoin,
     LineStyle, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
 };
@@ -19,7 +19,7 @@ use crate::{
 
 use glfw::PWindow;
 use std::sync::Arc;
-use x11_dl::xlib::{self, Display, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib, GC};
+use x11_dl::xlib::{self, Display, GC, Pixmap, TrueColor, Visual, XErrorEvent, XImage, Xlib};
 use x11_dl::{xfixes, xft, xrender, xrender::Xrender};
 extern crate glfw;
 use glfw::{Action, Context, Key};

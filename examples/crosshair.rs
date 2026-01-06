@@ -1,7 +1,7 @@
-use screen_overlay::{Color, DrawGeometry, Error, Overlay, OverlayConfig, Point, Stroke};
+use screen_overlay::legacy::{Color, DrawGeometry, Error, Overlay, OverlayConfig, Point, Stroke};
 
 pub fn main() -> std::result::Result<(), Error> {
-    screen_overlay::setup()?;
+    let setup_obj = screen_overlay::legacy::setup()?;
     let window = Overlay::new_with_config(&OverlayConfig {
         task_bar: true,
         on_top: true,
@@ -33,5 +33,5 @@ pub fn main() -> std::result::Result<(), Error> {
 
     let _crosshair = window.draw_geometry(&geometry, &stroke, &Default::default())?;
 
-    Ok(screen_overlay::block_and_loop()?)
+    Ok(screen_overlay::legacy::block_and_loop(setup_obj)?)
 }

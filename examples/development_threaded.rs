@@ -1,4 +1,4 @@
-use screen_overlay::{
+use screen_overlay::legacy::{
     // CapStyle, CircleDirection, GeometryElement, LineJoin,
     Color,
     DashStyle,
@@ -15,7 +15,7 @@ use screen_overlay::{
 };
 
 pub fn main() -> std::result::Result<(), Error> {
-    screen_overlay::setup()?;
+    let r = screen_overlay::legacy::setup()?;
     let window = Overlay::new_with_config(&OverlayConfig {
         name: "Awesome Overlay".to_owned(),
         ..Default::default()
@@ -136,7 +136,7 @@ pub fn main() -> std::result::Result<(), Error> {
         println!("blocking now");
         std::thread::sleep(std::time::Duration::from_millis(1000000));
     });
-    Ok(screen_overlay::block_and_loop()?)
+    Ok(screen_overlay::legacy::block_and_loop(r)?)
 
     // Ok(())
 }
