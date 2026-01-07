@@ -38,6 +38,8 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
 }
 
+pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
+
 use parking_lot::RwLock;
 use std::sync::atomic::Ordering;
 /*
@@ -186,6 +188,11 @@ pub fn main_test() -> eframe::Result {
     };
     let options = fullscreen_overlay_native_options(&config);
 
+    println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
+
+    let OTHER_DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied(10, 10, 10, 128);
+    println!("OTHER_DEBUG_COLOR: {OTHER_DEBUG_COLOR:?}");
+
     let overlay = OverlayHandle::new();
     let overlay_for_runner = overlay.clone();
     let handle = std::thread::spawn(move || {
@@ -210,11 +217,13 @@ pub fn main_test() -> eframe::Result {
 
                 egui::Area::new(egui::Id::new("my_value"))
                     .fixed_pos(egui::pos2(300.0, 100.0))
-                    .default_size(egui::vec2(600.0, 0.0))
+                    .default_size(egui::vec2(600.0, 50.0))
                     // .sizing_pass(value % 2 == 0)
                     .kind(egui::UiKind::GenericArea)
                     .show(ui.ctx(), |ui| {
-                        ui.horizontal_wrapped(|ui| ui.label(format!("normal text {}", value)))
+                        egui::CentralPanel::default()
+                            .frame(egui::Frame::default().fill(DEBUG_COLOR))
+                            .show_inside(ui, |ui| ui.label(format!("normal text {}", value)))
                     });
             })],
         }));
