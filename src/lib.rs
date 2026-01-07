@@ -59,16 +59,22 @@ pub struct PositionedElements {
     area: egui::Area,
     contents: Vec<Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>>,
 }
+// Area + label suffers from https://github.com/emilk/egui/issues/5138
+// Should we use a scroll area?
+// Or even just a fixed window?
+// https://docs.rs/egui/0.33.3/egui/index.html#auto-sizing-panels-and-windows
 
 pub enum Drawable {
+    /// Draw goes first, it can do anything on the ui, including adding things like panels.
     Draw(Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>),
-    PositionedElements(PositionedElements),
+    /// Then the central panel gets created and the central elements are drawn.
+    CentralElement(PositionedElements),
 }
 impl UiDrawable for Drawable {
     fn draw(&self, ui: &mut egui::Ui) {
         match self {
             Drawable::Draw(drawable) => (drawable)(ui),
-            Drawable::PositionedElements(elements) => {
+            Drawable::CentralElement(elements) => {
                 let area = elements.area.clone();
                 area.show(ui.ctx(), |ui| {
                     for e in elements.contents.iter() {
@@ -87,7 +93,7 @@ impl std::fmt::Debug for Drawable {
                 .debug_struct("Drawable::Draw")
                 .field("drawable", &"UiDrawable")
                 .finish(),
-            Drawable::PositionedElements(elements) => f
+            Drawable::CentralElement(elements) => f
                 .debug_struct("Drawable::Elements")
                 .field("area", &elements.area)
                 .field("contents.len()", &elements.contents.len())
@@ -120,9 +126,22 @@ pub struct Overlay {
 impl Overlay {
     fn draw(&self, ui: &mut egui::Ui) {
         let z = self.elements.read();
+        // First, draw the raw drawables, that may add panels, and do whatever they want.
         for (_k, v) in z.iter() {
-            v.draw(ui)
+            if matches!(v, Drawable::Draw(_)) {
+                v.draw(ui)
+            };
         }
+        // Then, create the central panel for the remaining elements
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+            .show_inside(ui, |ui| {
+                for (_k, v) in z.iter() {
+                    if matches!(v, Drawable::CentralElement(_)) {
+                        v.draw(ui)
+                    };
+                }
+            });
     }
     pub fn add_element(&self, drawable: Drawable) -> VisualId {
         let index = VisualId(self.counter.fetch_add(1, Ordering::Relaxed));
@@ -180,31 +199,45 @@ pub fn main_test() -> eframe::Result {
 
         let our_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let our_counter_draw = our_counter.clone();
+        let our_counter_draw2 = our_counter.clone();
 
-        let token2 = overlay.add_drawable(Drawable::Draw(Box::new(move |ui| {
-            let value = our_counter_draw.load(Ordering::Relaxed);
-            let ratio = (value % 10) as f32 / 10.0;
-            egui::CentralPanel::default()
-                .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
-                .show_inside(ui, |ui| {
-                    egui::Area::new(egui::Id::new("my_value"))
-                        .fixed_pos(egui::pos2(300.0, 100.0))
-                        .default_size(egui::vec2(500.0, 200.0))
-                        .kind(egui::UiKind::GenericArea)
-                        .show(ui.ctx(), |ui| ui.label(format!("{}", value)));
-                    egui::Area::new(egui::Id::new("my_progressbar"))
-                        .fixed_pos(egui::pos2(300.0, 200.0))
-                        .default_size(egui::vec2(50.0, 200.0))
-                        .show(ui.ctx(), |ui| {
-                            ui.add(egui::widgets::ProgressBar::new(ratio))
-                        });
-                });
-        })));
+        let token2 = overlay.add_drawable(Drawable::CentralElement(PositionedElements {
+            area: egui::Area::new(egui::Id::new("my_progressbar"))
+                .fixed_pos(egui::pos2(300.0, 200.0))
+                .default_size(egui::vec2(50.0, 200.0)),
+            contents: vec![Box::new(move |ui| {
+                let value = our_counter_draw.load(Ordering::Relaxed);
 
-        loop {
+                egui::Area::new(egui::Id::new("my_value"))
+                    .fixed_pos(egui::pos2(300.0, 100.0))
+                    .default_size(egui::vec2(600.0, 0.0))
+                    // .sizing_pass(value % 2 == 0)
+                    .kind(egui::UiKind::GenericArea)
+                    .show(ui.ctx(), |ui| {
+                        ui.horizontal_wrapped(|ui| ui.label(format!("normal text {}", value)))
+                    });
+            })],
+        }));
+
+        let token_progressbar =
+            overlay.add_drawable(Drawable::CentralElement(PositionedElements {
+                area: egui::Area::new(egui::Id::new("my_progressbar"))
+                    .fixed_pos(egui::pos2(300.0, 200.0))
+                    .default_size(egui::vec2(50.0, 200.0)),
+                contents: vec![Box::new(move |ui| {
+                    let value = our_counter_draw2.load(Ordering::Relaxed);
+                    let ratio = (value % 10) as f32 / 10.0;
+
+                    ui.add(egui::widgets::ProgressBar::new(ratio));
+                })],
+            }));
+        for i in 0..10000 {
             std::thread::sleep(std::time::Duration::from_millis(100));
             // Do nothing, just wait
             our_counter.fetch_add(1, Ordering::Relaxed);
+            // if i > 10 {
+            //     break;
+            // }
         }
     });
     eframe::run_native(
@@ -232,6 +265,10 @@ impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx();
         fullscreen_overlay_configure(ctx, &self.config);
+        ctx.global_style_mut(|style| {
+            // Make the background of the progress bar semi-transparent
+            style.visuals.extreme_bg_color = egui::Color32::from_rgba_unmultiplied(10, 10, 10, 128);
+        });
         // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
 
         self.overlay.0.draw(ui);
@@ -246,12 +283,12 @@ impl eframe::App for TestOverlayApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
             .show_inside(ui, |ui| {
-                egui::Area::new(egui::Id::new("my_areaz"))
+                egui::Area::new(egui::Id::new("my_areaz2"))
                     .fixed_pos(egui::pos2(300.0, 100.0))
                     .default_size(egui::vec2(500.0, 200.0))
                     .kind(egui::UiKind::GenericArea)
                     .show(ui.ctx(), |ui| ui.label("Normal text"));
-                egui::Area::new(egui::Id::new("my_area"))
+                egui::Area::new(egui::Id::new("my_area2"))
                     .fixed_pos(egui::pos2(320.0, 320.0))
                     .default_size(egui::vec2(500.0, 200.0))
                     .show(ui.ctx(), |ui| {
