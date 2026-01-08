@@ -40,7 +40,7 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
 
-use egui::{Pos2, Vec2};
+use egui::{Pos2, Stroke, Vec2};
 use parking_lot::RwLock;
 use std::sync::atomic::Ordering;
 /*
@@ -85,10 +85,15 @@ impl PositionedElements {
         self
     }
 
-    /// The fill color of this area, useful for debugging with [crate::DEBUG_COLOR]
+    /// The fill color of this area.
     pub fn fill(mut self, fill: Color32) -> Self {
         self.fill = Some(fill);
         self
+    }
+
+    /// Set the fill color to the debug color.
+    pub fn debug_color(self) -> Self {
+        self.fill(DEBUG_COLOR)
     }
 
     /// Add a a lambda to this element.
@@ -120,6 +125,12 @@ pub enum Drawable {
     Draw(Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>),
     /// Then the central panel gets created and the central elements are drawn.
     CentralElement(PositionedElements),
+}
+
+impl From<PositionedElements> for Drawable {
+    fn from(elements: PositionedElements) -> Self {
+        Drawable::CentralElement(elements)
+    }
 }
 impl Drawable {
     fn draw(&self, ui: &mut egui::Ui) {
@@ -190,14 +201,36 @@ impl Drop for VisualHandle {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Overlay {
+    style: egui::Style,
     counter: std::sync::atomic::AtomicUsize,
     elements: RwLock<std::collections::HashMap<VisualId, Drawable>>,
 }
 
 impl Overlay {
+    pub fn new() -> Self {
+        let mut style = egui::Style::default();
+
+        // To find the right keys, https://www.egui.rs/ and click backend.
+
+        // Top panel style.
+        style.visuals.panel_fill = Color32::TRANSPARENT; // panel background.
+        style.visuals.widgets.noninteractive.bg_stroke = Stroke::NONE; // Top panel divider line.
+
+        // Color behind a progress bar.
+        style.visuals.extreme_bg_color = Color32::from_rgba_unmultiplied(10, 10, 10, 128);
+
+        Self {
+            style,
+            counter: 0.into(),
+            elements: Default::default(),
+        }
+    }
     fn draw(&self, ui: &mut egui::Ui) {
+        // Apply the overlay style.
+        (*ui.style_mut()) = self.style.clone();
+
         let z = self.elements.read();
         // First, draw the raw drawables, that may add panels, and do whatever they want.
         for (_k, v) in z.iter() {
@@ -227,12 +260,13 @@ impl Overlay {
         v.remove(&visual);
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct OverlayHandle(std::sync::Arc<Overlay>);
 
 impl OverlayHandle {
-    pub fn new() -> OverlayHandle {
-        OverlayHandle(Overlay::default().into())
+    pub fn new(overlay: Overlay) -> OverlayHandle {
+        OverlayHandle(overlay.into())
     }
     pub fn add_drawable(&self, drawable: Drawable) -> VisualHandle {
         let id = self.0.add_element(drawable);
@@ -246,14 +280,6 @@ impl OverlayHandle {
     }
 }
 
-fn test_clone(ui: &mut egui::Ui) {
-    // let v = vec![egui::widgets::Label::new("foo").fixed_pos(100.0, 30.0)];
-    use egui::Widget;
-    // v[0].ui(ui); // no copy on Label
-    // let a = v[0].clone(); // no clone on Label :/
-    // Should probably just make a WidgetFactory?
-}
-
 pub fn main_test() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let config = OverlayConfig {
@@ -264,10 +290,8 @@ pub fn main_test() -> eframe::Result {
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
-    let OTHER_DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied(10, 10, 10, 128);
-    println!("OTHER_DEBUG_COLOR: {OTHER_DEBUG_COLOR:?}");
-
-    let overlay = OverlayHandle::new();
+    let overlay = Overlay::new();
+    let overlay = OverlayHandle::new(overlay);
     let overlay_for_runner = overlay.clone();
     let handle = std::thread::spawn(move || {
         let overlay = overlay_for_runner;
@@ -282,25 +306,24 @@ pub fn main_test() -> eframe::Result {
         let our_counter_draw = our_counter.clone();
         let our_counter_draw2 = our_counter.clone();
 
-        let token2 = overlay.add_drawable(Drawable::CentralElement(
+        let token2 = overlay.add_drawable(
             PositionedElements::new()
                 .fixed_pos(egui::pos2(300.0, 200.0))
                 .default_size(egui::vec2(150.0, 200.0))
-                .fill(DEBUG_COLOR)
                 .add(move |ui| {
                     let value = our_counter_draw.load(Ordering::Relaxed);
                     ui.label(format!("normal text {}", value));
                 })
                 .add(|ui| {
                     ui.label("hahaha");
-                }),
-        ));
+                })
+                .into(),
+        );
 
         let token_progressbar = overlay.add_drawable(Drawable::CentralElement(
             PositionedElements::new()
                 .fixed_pos(egui::pos2(500.0, 250.0))
                 .default_size(egui::vec2(850.0, 100.0))
-                .fill(DEBUG_COLOR)
                 .add(move |ui| {
                     let value = our_counter_draw2.load(Ordering::Relaxed);
                     let ratio = (value % 10) as f32 / 10.0;
@@ -324,18 +347,13 @@ pub fn main_test() -> eframe::Result {
         Box::new(|cc| {
             // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(TestOverlayApp {
-                config,
-                counter: 0.0,
-                overlay,
-            }))
+            Ok(Box::new(TestOverlayApp { config, overlay }))
         }),
     )
 }
 
 struct TestOverlayApp {
     config: OverlayConfig,
-    counter: f32,
     overlay: OverlayHandle,
 }
 
@@ -350,39 +368,6 @@ impl eframe::App for TestOverlayApp {
         // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
 
         self.overlay.draw(ui);
-
-        /*
-        let pos = egui::pos2(1920.0 / 2.0 - 100.0, 1080.0 / 2.0 - 100.0);
-        self.counter = self.counter.rem_euclid(1.0) + 0.005;
-
-        egui::Panel::top("my_panel").show_inside(ui, |ui| {
-            ui.label("Hello World! From `TopBottomPanel`, that must be before `CentralPanel`!");
-        });
-        egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
-            .show_inside(ui, |ui| {
-                egui::Area::new(egui::Id::new("my_areaz2"))
-                    .fixed_pos(egui::pos2(300.0, 100.0))
-                    .default_size(egui::vec2(500.0, 200.0))
-                    .kind(egui::UiKind::GenericArea)
-                    .show(ui.ctx(), |ui| ui.label("Normal text"));
-                egui::Area::new(egui::Id::new("my_area2"))
-                    .fixed_pos(egui::pos2(320.0, 320.0))
-                    .default_size(egui::vec2(500.0, 200.0))
-                    .show(ui.ctx(), |ui| {
-                        ui.image(egui::include_image!(
-                            // "../../PNG_transparency_demonstration_1.png"
-                            "../examples/crosshair_image.png"
-                        ))
-                    });
-                egui::Area::new(egui::Id::new("my_progressbar"))
-                    .fixed_pos(pos)
-                    .default_size(egui::vec2(50.0, 200.0))
-                    .show(ui.ctx(), |ui| {
-                        ui.add(egui::widgets::ProgressBar::new(self.counter))
-                    });
-            });
-            */
     }
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         egui::Rgba::TRANSPARENT.to_array()
