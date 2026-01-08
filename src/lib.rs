@@ -54,33 +54,44 @@ use std::sync::atomic::Ordering;
     communicate to each other well... should we do a 'tree' in the naming?
 */
 
-pub trait UiDrawable: std::marker::Send + std::marker::Sync {
-    fn draw(&self, ui: &mut egui::Ui);
-}
-
-#[derive(Default)]
 pub struct PositionedElements {
     fixed_pos: Pos2,
     default_size: Vec2,
     fill: Option<Color32>,
     contents: Vec<Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>>,
 }
+
 impl PositionedElements {
+    /// Create a new positioned element that's mostly empty.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            fixed_pos: Pos2::ZERO,
+            default_size: Vec2::NAN, // makes it default to the style's default.
+            fill: None,
+            contents: Default::default(),
+        }
     }
+    /// This specifies where the element is positioned.
     pub fn fixed_pos(mut self, fixed_pos: impl Into<Pos2>) -> Self {
         self.fixed_pos = fixed_pos.into();
         self
     }
+
+    /// This specifies the default size, without this it inherits a default size.
+    ///
+    /// Be careful with elements that will grow in size. See [egui::Area::default_size].
     pub fn default_size(mut self, default_size: impl Into<Vec2>) -> Self {
         self.default_size = default_size.into();
         self
     }
+
+    /// The fill color of this area, useful for debugging with [crate::DEBUG_COLOR]
     pub fn fill(mut self, fill: Color32) -> Self {
         self.fill = Some(fill);
         self
     }
+
+    /// Add a a lambda to this element.
     pub fn add(
         mut self,
         ui_gen: impl Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync + 'static,
@@ -88,6 +99,8 @@ impl PositionedElements {
         self.contents.push(Box::new(ui_gen));
         self
     }
+
+    /// Add a boxed lambda to this element.
     pub fn add_dyn(
         mut self,
         ui_gen: Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>,
@@ -108,22 +121,32 @@ pub enum Drawable {
     /// Then the central panel gets created and the central elements are drawn.
     CentralElement(PositionedElements),
 }
-impl UiDrawable for Drawable {
+impl Drawable {
     fn draw(&self, ui: &mut egui::Ui) {
         match self {
-            Drawable::Draw(drawable) => (drawable)(ui),
+            Drawable::Draw(drawable) => {
+                // Trivial situation, just call it and move on.
+                (drawable)(ui)
+            }
             Drawable::CentralElement(elements) => {
+                // Here, we create a new area, that we give the approprpiate position and size, then we make a new
+                // central panel in that area to ensure it gets the appropriate size
+
+                // Generate the id and consume it.
                 let id = ui.next_auto_id();
+                ui.skip_ahead_auto_ids(1);
                 egui::Area::new(id)
                     .fixed_pos(elements.fixed_pos)
                     .default_size(elements.default_size)
+                    .movable(false) // it's passthrough, but lets do this anyway.
                     .show(ui.ctx(), |ui| {
-                        egui::CentralPanel::default()
+                        egui::CentralPanel::default() // This fills up the space in the default size.
                             .frame(
-                                egui::Frame::default()
+                                egui::Frame::default() // style the area
                                     .fill(elements.fill.unwrap_or(Color32::TRANSPARENT)),
                             )
                             .show_inside(ui, |ui| {
+                                // Finally, iterate over the callbacks and populate them.
                                 for e in elements.contents.iter() {
                                     (e)(ui);
                                 }
@@ -143,7 +166,9 @@ impl std::fmt::Debug for Drawable {
                 .finish(),
             Drawable::CentralElement(elements) => f
                 .debug_struct("Drawable::Elements")
-                // .field("area", &elements.area)
+                .field("fixed_pos", &elements.fixed_pos)
+                .field("default_size", &elements.default_size)
+                .field("fill", &elements.fill)
                 .field("contents.len()", &elements.contents.len())
                 .finish(),
         }
@@ -216,6 +241,9 @@ impl OverlayHandle {
             overlay: self.0.clone(),
         }
     }
+    pub fn draw(&self, ui: &mut egui::Ui) {
+        self.0.draw(ui)
+    }
 }
 
 fn test_clone(ui: &mut egui::Ui) {
@@ -271,7 +299,7 @@ pub fn main_test() -> eframe::Result {
         let token_progressbar = overlay.add_drawable(Drawable::CentralElement(
             PositionedElements::new()
                 .fixed_pos(egui::pos2(500.0, 250.0))
-                .default_size(egui::vec2(150.0, 200.0))
+                .default_size(egui::vec2(850.0, 100.0))
                 .fill(DEBUG_COLOR)
                 .add(move |ui| {
                     let value = our_counter_draw2.load(Ordering::Relaxed);
@@ -321,7 +349,7 @@ impl eframe::App for TestOverlayApp {
         });
         // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
 
-        self.overlay.0.draw(ui);
+        self.overlay.draw(ui);
 
         /*
         let pos = egui::pos2(1920.0 / 2.0 - 100.0, 1080.0 / 2.0 - 100.0);
