@@ -40,6 +40,7 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
 
+use egui::{Pos2, Vec2};
 use parking_lot::RwLock;
 use std::sync::atomic::Ordering;
 /*
@@ -57,10 +58,45 @@ pub trait UiDrawable: std::marker::Send + std::marker::Sync {
     fn draw(&self, ui: &mut egui::Ui);
 }
 
+#[derive(Default)]
 pub struct PositionedElements {
-    area: egui::Area,
+    fixed_pos: Pos2,
+    default_size: Vec2,
+    fill: Option<Color32>,
     contents: Vec<Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>>,
 }
+impl PositionedElements {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn fixed_pos(mut self, fixed_pos: impl Into<Pos2>) -> Self {
+        self.fixed_pos = fixed_pos.into();
+        self
+    }
+    pub fn default_size(mut self, default_size: impl Into<Vec2>) -> Self {
+        self.default_size = default_size.into();
+        self
+    }
+    pub fn fill(mut self, fill: Color32) -> Self {
+        self.fill = Some(fill);
+        self
+    }
+    pub fn add(
+        mut self,
+        ui_gen: impl Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync + 'static,
+    ) -> Self {
+        self.contents.push(Box::new(ui_gen));
+        self
+    }
+    pub fn add_dyn(
+        mut self,
+        ui_gen: Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>,
+    ) -> Self {
+        self.contents.push(ui_gen);
+        self
+    }
+}
+
 // Area + label suffers from https://github.com/emilk/egui/issues/5138
 // Should we use a scroll area?
 // Or even just a fixed window?
@@ -77,12 +113,22 @@ impl UiDrawable for Drawable {
         match self {
             Drawable::Draw(drawable) => (drawable)(ui),
             Drawable::CentralElement(elements) => {
-                let area = elements.area.clone();
-                area.show(ui.ctx(), |ui| {
-                    for e in elements.contents.iter() {
-                        (e)(ui);
-                    }
-                });
+                let id = ui.next_auto_id();
+                egui::Area::new(id)
+                    .fixed_pos(elements.fixed_pos)
+                    .default_size(elements.default_size)
+                    .show(ui.ctx(), |ui| {
+                        egui::CentralPanel::default()
+                            .frame(
+                                egui::Frame::default()
+                                    .fill(elements.fill.unwrap_or(Color32::TRANSPARENT)),
+                            )
+                            .show_inside(ui, |ui| {
+                                for e in elements.contents.iter() {
+                                    (e)(ui);
+                                }
+                            });
+                    });
             }
         }
     }
@@ -97,7 +143,7 @@ impl std::fmt::Debug for Drawable {
                 .finish(),
             Drawable::CentralElement(elements) => f
                 .debug_struct("Drawable::Elements")
-                .field("area", &elements.area)
+                // .field("area", &elements.area)
                 .field("contents.len()", &elements.contents.len())
                 .finish(),
         }
@@ -208,38 +254,33 @@ pub fn main_test() -> eframe::Result {
         let our_counter_draw = our_counter.clone();
         let our_counter_draw2 = our_counter.clone();
 
-        let token2 = overlay.add_drawable(Drawable::CentralElement(PositionedElements {
-            area: egui::Area::new(egui::Id::new("my_progressbar"))
+        let token2 = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
                 .fixed_pos(egui::pos2(300.0, 200.0))
-                .default_size(egui::vec2(50.0, 200.0)),
-            contents: vec![Box::new(move |ui| {
-                let value = our_counter_draw.load(Ordering::Relaxed);
+                .default_size(egui::vec2(150.0, 200.0))
+                .fill(DEBUG_COLOR)
+                .add(move |ui| {
+                    let value = our_counter_draw.load(Ordering::Relaxed);
+                    ui.label(format!("normal text {}", value));
+                })
+                .add(|ui| {
+                    ui.label("hahaha");
+                }),
+        ));
 
-                egui::Area::new(egui::Id::new("my_value"))
-                    .fixed_pos(egui::pos2(300.0, 100.0))
-                    .default_size(egui::vec2(600.0, 50.0))
-                    // .sizing_pass(value % 2 == 0)
-                    .kind(egui::UiKind::GenericArea)
-                    .show(ui.ctx(), |ui| {
-                        egui::CentralPanel::default()
-                            .frame(egui::Frame::default().fill(DEBUG_COLOR))
-                            .show_inside(ui, |ui| ui.label(format!("normal text {}", value)))
-                    });
-            })],
-        }));
-
-        let token_progressbar =
-            overlay.add_drawable(Drawable::CentralElement(PositionedElements {
-                area: egui::Area::new(egui::Id::new("my_progressbar"))
-                    .fixed_pos(egui::pos2(300.0, 200.0))
-                    .default_size(egui::vec2(50.0, 200.0)),
-                contents: vec![Box::new(move |ui| {
+        let token_progressbar = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(500.0, 250.0))
+                .default_size(egui::vec2(150.0, 200.0))
+                .fill(DEBUG_COLOR)
+                .add(move |ui| {
                     let value = our_counter_draw2.load(Ordering::Relaxed);
                     let ratio = (value % 10) as f32 / 10.0;
 
                     ui.add(egui::widgets::ProgressBar::new(ratio));
-                })],
-            }));
+                }),
+        ));
+
         for i in 0..10000 {
             std::thread::sleep(std::time::Duration::from_millis(100));
             // Do nothing, just wait
