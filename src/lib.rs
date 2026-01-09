@@ -40,7 +40,7 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
 
-use egui::{Pos2, Stroke, Vec2};
+use egui::{Pos2, Stroke, Vec2, pos2};
 use parking_lot::RwLock;
 use std::sync::atomic::Ordering;
 /*
@@ -329,6 +329,39 @@ pub fn main_test() -> eframe::Result {
                     let ratio = (value % 10) as f32 / 10.0;
 
                     ui.add(egui::widgets::ProgressBar::new(ratio));
+                }),
+        ));
+
+        let drawable = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(500.0, 350.0))
+                .default_size(egui::vec2(850.0, 100.0))
+                .debug_color()
+                .add(move |ui| {
+                    // Note painted contents are clipped to the default size space.
+                    let (mut response, painter) =
+                        ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::empty());
+
+                    // let to_screen = egui::emath::RectTransform::from_to(
+                    //     egui::Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+                    //     response.rect,
+                    // );
+                    // May need to_screen * pos2(0.0, 0.0),
+
+                    let stroke = egui::Stroke::new(5.0, Color32::RED);
+
+                    let shapes = vec![
+                        egui::Shape::line(vec![pos2(500.0, 350.0), pos2(850.0, 450.0)], stroke),
+                        egui::Shape::Circle(egui::epaint::CircleShape {
+                            center: pos2(550.0, 400.0),
+                            radius: 5.0,
+                            fill: Color32::GREEN,
+                            stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                        }),
+                    ];
+                    // println!("shapes: {shapes:?} ");
+
+                    painter.extend(shapes);
                 }),
         ));
 
