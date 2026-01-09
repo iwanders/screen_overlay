@@ -1,3 +1,4 @@
+/// The legacy system, using dxgi on linux, glfw + x11 + three_d on linux.
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};

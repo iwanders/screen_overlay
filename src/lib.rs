@@ -1,5 +1,4 @@
-/// The legacy system, using dxgi on linux, glfw + x11 + three_d on linux. The new system uses egui/eframe for a full
-/// screen overlay.
+/// The new system uses egui/eframe for a full screen overlay.
 pub mod legacy;
 
 use eframe::egui::{self, Color32, ViewportCommand};
@@ -55,6 +54,10 @@ use std::sync::atomic::Ordering;
     communicate to each other well... should we do a 'tree' in the naming?
 */
 
+/// This is a helper for drawing positioned ui elements.
+///
+/// It holds a position and a size, and the provided elements are drawn into that area.
+/// The area can be visualised for easy debugging by setting a fill color.
 pub struct PositionedElements {
     fixed_pos: Pos2,
     default_size: Vec2,
@@ -63,7 +66,7 @@ pub struct PositionedElements {
 }
 
 impl PositionedElements {
-    /// Create a new positioned element that's mostly empty.
+    /// Create a new positioned element in the top left corner with the default area size.
     pub fn new() -> Self {
         Self {
             fixed_pos: Pos2::ZERO,
@@ -94,7 +97,7 @@ impl PositionedElements {
         self
     }
 
-    /// Set the fill color to the debug color.
+    /// Set the fill color to the debug color, which is a transparent dark gray.
     pub fn debug_color(self) -> Self {
         self.fill(DEBUG_COLOR)
     }
@@ -141,6 +144,7 @@ impl PositionedElements {
 // Or even just a fixed window?
 // https://docs.rs/egui/0.33.3/egui/index.html#auto-sizing-panels-and-windows
 
+/// A drawable.
 pub enum Drawable {
     /// Draw goes first, it can do anything on the ui, including adding things like panels.
     Draw(Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>),
@@ -331,12 +335,13 @@ pub fn main_test() -> eframe::Result {
             PositionedElements::new()
                 .fixed_pos(egui::pos2(300.0, 200.0))
                 .default_size(egui::vec2(150.0, 200.0))
+                .debug_color()
                 .add(move |ui| {
                     let value = our_counter_draw.load(Ordering::Relaxed);
                     ui.label(format!("normal text {}", value));
                 })
                 .add(|ui| {
-                    ui.label("hahaha");
+                    ui.label("ha-haaa it works!");
                 })
                 .into(),
         );
@@ -357,7 +362,7 @@ pub fn main_test() -> eframe::Result {
             PositionedElements::new()
                 .fixed_pos(egui::pos2(500.0, 350.0))
                 .default_size(egui::vec2(850.0, 100.0))
-                .debug_color()
+                // .debug_color()
                 .paint(vec![
                     egui::Shape::line(
                         vec![pos2(500.0, 350.0), pos2(850.0, 450.0)],
@@ -382,7 +387,7 @@ pub fn main_test() -> eframe::Result {
             PositionedElements::new()
                 .fixed_pos(egui::pos2(0.0, 0.0))
                 .default_size(egui::vec2(config.width as f32, config.height as f32))
-                .debug_color()
+                // .debug_color()
                 .paint(vec![
                     egui::Shape::Circle(egui::epaint::CircleShape {
                         center: cpos,
@@ -399,6 +404,30 @@ pub fn main_test() -> eframe::Result {
                         stroke: egui::Stroke::new(2.0, Color32::ORANGE),
                     },
                 ]),
+        ));
+
+        // This image scales to fit the size.
+        let image_on_screen1 = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(900.0, 300.0))
+                .default_size(egui::vec2(235.0 * 1.1, 140.0 * 1.1)) // Should scale up and be a bit blurry.
+                .add(|ui| {
+                    // Adding the image like this scales to this size.
+                    ui.image(egui::include_image!("../examples/crosshair_image.png"));
+                }),
+        ));
+        let image_on_screen2 = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(1300.0, 300.0))
+                .default_size(egui::vec2(535.0, 240.0)) // Adding the image like this scales to this size.
+                // .debug_color() // toggle this to see that this doesn't cover the entire area.
+                .add(|ui| {
+                    // THis way the image should be crisp.
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../examples/crosshair_image.png"))
+                            .fit_to_original_size(1.0), // prevents scaling to fit the size.
+                    );
+                }),
         ));
 
         for i in 0..10000 {
