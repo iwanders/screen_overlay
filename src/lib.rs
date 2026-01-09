@@ -311,7 +311,6 @@ pub fn main_test() -> eframe::Result {
         width: 1920 * 2,
         height: 1080,
     };
-    let options = fullscreen_overlay_native_options(&config);
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
@@ -439,6 +438,14 @@ pub fn main_test() -> eframe::Result {
             // }
         }
     });
+
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("normal")
+            .with_inner_size([200.0, 100.0]),
+        ..Default::default()
+    };
+    // let options = fullscreen_overlay_native_options(&config);
     eframe::run_native(
         "Image Viewer",
         options,
@@ -457,10 +464,22 @@ struct TestOverlayApp {
 
 impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx();
-        fullscreen_overlay_configure(ctx, &self.config);
+        let config = self.config;
+        let overlay_copy = self.overlay.clone();
+        ui.ctx().show_viewport_deferred(
+            egui::ViewportId::from_hash_of("deferred_viewport"),
+            fullscreen_overlay_native_options(&self.config).viewport,
+            move |ui, class| {
+                let ctx = ui.ctx();
+                fullscreen_overlay_configure(ctx, &config);
 
-        self.overlay.draw(ui);
+                overlay_copy.draw(ui);
+            },
+        );
+
+        // println!("things");
+        // self.overlay.draw(ui);
+        ui.heading("My egui Application");
     }
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         egui::Rgba::TRANSPARENT.to_array()
