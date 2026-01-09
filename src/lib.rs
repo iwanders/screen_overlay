@@ -231,10 +231,11 @@ pub struct Overlay {
     style: egui::Style,
     counter: std::sync::atomic::AtomicUsize,
     elements: RwLock<std::collections::HashMap<VisualId, Drawable>>,
+    config: OverlayConfig,
 }
 
 impl Overlay {
-    pub fn new() -> Self {
+    pub fn new(config: OverlayConfig) -> Self {
         let mut style = egui::Style::default();
 
         // To find the right keys, https://www.egui.rs/ and click backend.
@@ -250,6 +251,7 @@ impl Overlay {
             style,
             counter: 0.into(),
             elements: Default::default(),
+            config,
         }
     }
     fn draw(&self, ui: &mut egui::Ui) {
@@ -274,6 +276,12 @@ impl Overlay {
                 }
             });
     }
+
+    pub fn configure(&self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx();
+        fullscreen_overlay_configure(ctx, &self.config);
+    }
+
     pub fn add_element(&self, drawable: Drawable) -> VisualId {
         let index = VisualId(self.counter.fetch_add(1, Ordering::Relaxed));
         let mut v = self.elements.write();
@@ -283,6 +291,9 @@ impl Overlay {
     fn remove_element(&self, visual: VisualId) {
         let mut v = self.elements.write();
         v.remove(&visual);
+    }
+    pub fn viewport_builder(&self) -> egui::ViewportBuilder {
+        fullscreen_overlay_native_options(&self.config).viewport
     }
 }
 
@@ -300,8 +311,29 @@ impl OverlayHandle {
             overlay: self.0.clone(),
         }
     }
+
+    pub fn configure(&self, ui: &mut egui::Ui) {
+        self.0.configure(ui);
+    }
+
     pub fn draw(&self, ui: &mut egui::Ui) {
         self.0.draw(ui)
+    }
+
+    pub fn viewport_builder(&self) -> egui::ViewportBuilder {
+        self.0.viewport_builder()
+    }
+
+    pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
+        let overlay_copy = self.clone();
+        ui.ctx().show_viewport_deferred(
+            egui::ViewportId::from_hash_of("deferred_viewport"),
+            self.viewport_builder(),
+            move |ui, _class| {
+                overlay_copy.configure(ui);
+                overlay_copy.draw(ui);
+            },
+        );
     }
 }
 
@@ -314,7 +346,7 @@ pub fn main_test() -> eframe::Result {
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
-    let overlay = Overlay::new();
+    let overlay = Overlay::new(config);
     let overlay = OverlayHandle::new(overlay);
     let overlay_for_runner = overlay.clone();
     let handle = std::thread::spawn(move || {
@@ -466,16 +498,8 @@ impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let config = self.config;
         let overlay_copy = self.overlay.clone();
-        ui.ctx().show_viewport_deferred(
-            egui::ViewportId::from_hash_of("deferred_viewport"),
-            fullscreen_overlay_native_options(&self.config).viewport,
-            move |ui, class| {
-                let ctx = ui.ctx();
-                fullscreen_overlay_configure(ctx, &config);
 
-                overlay_copy.draw(ui);
-            },
-        );
+        self.overlay.show_viewport_deferred(ui);
 
         // println!("things");
         // self.overlay.draw(ui);
