@@ -80,6 +80,8 @@ impl PositionedElements {
     /// This specifies the default size, without this it inherits a default size.
     ///
     /// Be careful with elements that will grow in size. See [egui::Area::default_size].
+    /// Be also aware that anything outside of the area will be clipped. Specifically important with drawings that
+    /// don't flow.
     pub fn default_size(mut self, default_size: impl Into<Vec2>) -> Self {
         self.default_size = default_size.into();
         self
@@ -112,6 +114,24 @@ impl PositionedElements {
     ) -> Self {
         self.contents.push(ui_gen);
         self
+    }
+
+    /// Paint shapes to the screen, note that these are clipped using the size.
+    pub fn paint<I: IntoIterator<Item = egui::Shape>>(self, items: I) -> Self {
+        let shapes: Vec<egui::Shape> = items.into_iter().collect();
+        self.add(move |ui| {
+            // Note painted contents are clipped to the default size space.
+            let (mut _response, painter) =
+                ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::empty());
+
+            // May need to_screen * pos2(0.0, 0.0)... do we?
+            // let to_screen = egui::emath::RectTransform::from_to(
+            //     egui::Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+            //     response.rect,
+            // );
+
+            painter.extend(shapes.iter().cloned());
+        })
     }
 }
 
@@ -337,32 +357,42 @@ pub fn main_test() -> eframe::Result {
                 .fixed_pos(egui::pos2(500.0, 350.0))
                 .default_size(egui::vec2(850.0, 100.0))
                 .debug_color()
-                .add(move |ui| {
-                    // Note painted contents are clipped to the default size space.
-                    let (mut response, painter) =
-                        ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::empty());
+                .paint(vec![
+                    egui::Shape::line(
+                        vec![pos2(500.0, 350.0), pos2(850.0, 450.0)],
+                        egui::Stroke::new(5.0, Color32::RED),
+                    ),
+                    egui::Shape::Circle(egui::epaint::CircleShape {
+                        center: pos2(550.0, 400.0),
+                        radius: 5.0,
+                        fill: Color32::GREEN,
+                        stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                    }),
+                ]),
+        ));
 
-                    // let to_screen = egui::emath::RectTransform::from_to(
-                    //     egui::Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
-                    //     response.rect,
-                    // );
-                    // May need to_screen * pos2(0.0, 0.0),
-
-                    let stroke = egui::Stroke::new(5.0, Color32::RED);
-
-                    let shapes = vec![
-                        egui::Shape::line(vec![pos2(500.0, 350.0), pos2(850.0, 450.0)], stroke),
-                        egui::Shape::Circle(egui::epaint::CircleShape {
-                            center: pos2(550.0, 400.0),
-                            radius: 5.0,
-                            fill: Color32::GREEN,
-                            stroke: egui::Stroke::new(2.0, Color32::ORANGE),
-                        }),
-                    ];
-                    // println!("shapes: {shapes:?} ");
-
-                    painter.extend(shapes);
-                }),
+        let cpos = pos2(1000.0, 500.0);
+        let len = egui::vec2(15.0, 0.0);
+        let crosshair = overlay.add_drawable(Drawable::CentralElement(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(0.0, 0.0))
+                .default_size(egui::vec2(config.width as f32, config.height as f32))
+                .paint(vec![
+                    egui::Shape::Circle(egui::epaint::CircleShape {
+                        center: cpos,
+                        radius: 10.0,
+                        fill: Color32::TRANSPARENT,
+                        stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                    }),
+                    egui::Shape::LineSegment {
+                        points: [cpos - len, cpos + len],
+                        stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                    },
+                    egui::Shape::LineSegment {
+                        points: [cpos - len.rot90(), cpos + len.rot90()],
+                        stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                    },
+                ]),
         ));
 
         for i in 0..10000 {
