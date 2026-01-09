@@ -23,6 +23,7 @@ fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOp
             .with_always_on_top() // Must be repeated in viewport configure.
             // .with_decorations(false)
             // .with_titlebar_shown(false)
+            .with_clamp_size_to_monitor_size(false) // Necessary to ensure we can have windows wider than the monitor.
             .with_override_redirect(true) // Must be here to bypass the window manager, but not the compositor.
             .with_window_type(egui::X11WindowType::Utility),
         ..Default::default()
@@ -116,7 +117,7 @@ impl PositionedElements {
         self
     }
 
-    /// Paint shapes to the screen, note that these are clipped using the size.
+    /// Paint shapes to the screen, note that these are clipped to the area. Coordinates are in screen space points.
     pub fn paint<I: IntoIterator<Item = egui::Shape>>(self, items: I) -> Self {
         let shapes: Vec<egui::Shape> = items.into_iter().collect();
         self.add(move |ui| {
@@ -371,18 +372,23 @@ pub fn main_test() -> eframe::Result {
                 ]),
         ));
 
-        let cpos = pos2(1000.0, 500.0);
+        let cpos = pos2(1000.0, 500.0); // crosshair pos, but then short.
         let len = egui::vec2(15.0, 0.0);
+        println!(
+            "config.width as f32 * 0.5237: {}",
+            config.width as f32 * 0.5237
+        );
         let crosshair = overlay.add_drawable(Drawable::CentralElement(
             PositionedElements::new()
                 .fixed_pos(egui::pos2(0.0, 0.0))
                 .default_size(egui::vec2(config.width as f32, config.height as f32))
+                .debug_color()
                 .paint(vec![
                     egui::Shape::Circle(egui::epaint::CircleShape {
                         center: cpos,
                         radius: 10.0,
                         fill: Color32::TRANSPARENT,
-                        stroke: egui::Stroke::new(2.0, Color32::ORANGE),
+                        stroke: egui::Stroke::new(1.5, Color32::ORANGE),
                     }),
                     egui::Shape::LineSegment {
                         points: [cpos - len, cpos + len],
@@ -424,11 +430,6 @@ impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx();
         fullscreen_overlay_configure(ctx, &self.config);
-        ctx.global_style_mut(|style| {
-            // Make the background of the progress bar semi-transparent
-            style.visuals.extreme_bg_color = egui::Color32::from_rgba_unmultiplied(10, 10, 10, 128);
-        });
-        // ctx.send_viewport_cmd(ViewportCommand::Maximized(true));
 
         self.overlay.draw(ui);
     }
