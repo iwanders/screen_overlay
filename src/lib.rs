@@ -42,11 +42,33 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 
 #[cfg(target_os = "windows")]
 fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
-    todo!()
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([config.width as f32, config.height as f32]) // Must be repeated in viewport configure.
+            .with_resizable(false)
+            .with_fullscreen(true)
+            .with_maximized(true)
+            .with_transparent(true)
+            .with_taskbar(false)
+            // .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
+            .with_always_on_top()
+            .with_decorations(false)
+            //.with_position(egui::pos2(-1920.0, 0.0)) // for left monitor.
+            .with_titlebar_shown(false), // Necessary to ensure we can have windows wider than the monitor.
+        // multisampling: 1,
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
+    }
 }
 #[cfg(target_os = "windows")]
 fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
-    todo!()
+    // do nothing?
+    ctx.send_viewport_cmd(ViewportCommand::InnerSize(
+        (config.width as f32, config.height as f32).into(),
+    ));
+    ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
+    ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+    ctx.send_viewport_cmd(ViewportCommand::Transparent(true));
 }
 
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
