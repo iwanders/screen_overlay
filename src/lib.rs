@@ -40,6 +40,15 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
 }
 
+#[cfg(target_os = "windows")]
+fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
+    todo!()
+}
+#[cfg(target_os = "windows")]
+fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
+    todo!()
+}
+
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
 
 use egui::{Pos2, Stroke, Vec2, pos2};
