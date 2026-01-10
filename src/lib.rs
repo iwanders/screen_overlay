@@ -484,21 +484,17 @@ pub fn main_test() -> eframe::Result {
         Box::new(|cc| {
             // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(TestOverlayApp { config, overlay }))
+            Ok(Box::new(TestOverlayApp { overlay }))
         }),
     )
 }
 
 struct TestOverlayApp {
-    config: OverlayConfig,
     overlay: OverlayHandle,
 }
 
 impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let config = self.config;
-        let overlay_copy = self.overlay.clone();
-
         self.overlay.show_viewport_deferred(ui);
 
         // println!("things");
