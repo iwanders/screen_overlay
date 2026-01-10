@@ -41,7 +41,7 @@ fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
 }
 
 #[cfg(target_os = "windows")]
-fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
+pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([config.width as f32, config.height as f32]) // Must be repeated in viewport configure.
@@ -61,7 +61,7 @@ fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOp
     }
 }
 #[cfg(target_os = "windows")]
-fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
+pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     // do nothing?
     ctx.send_viewport_cmd(ViewportCommand::InnerSize(
         (config.width as f32, config.height as f32).into(),
@@ -191,7 +191,7 @@ impl From<PositionedElements> for Drawable {
     }
 }
 impl Drawable {
-    fn draw(&self, ui: &mut egui::Ui) {
+    pub fn draw(&self, ui: &mut egui::Ui) {
         match self {
             Drawable::Draw(drawable) => {
                 // Trivial situation, just call it and move on.
