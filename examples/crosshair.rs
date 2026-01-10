@@ -1,37 +1,45 @@
-use screen_overlay::legacy::{Color, DrawGeometry, Error, Overlay, OverlayConfig, Point, Stroke};
-
-pub fn main() -> std::result::Result<(), Error> {
-    let setup_obj = screen_overlay::legacy::setup()?;
-    let window = Overlay::new_with_config(&OverlayConfig {
-        task_bar: true,
-        on_top: true,
-        name: "Crosshair".to_owned(),
-        ..Default::default()
-    })?;
-
-    let pixel_offset = 0.5;
-    let crosshair_pos = Point::new(1920.0 / 2.0 + pixel_offset, 1080.0 / 2.0 + pixel_offset);
-
-    let size = 20.0;
-    let top = crosshair_pos + Point::new(0.0, -size);
-    let below = crosshair_pos + Point::new(0.0, size);
-
-    let left = crosshair_pos + Point::new(-size, 0.0);
-    let right = crosshair_pos + Point::new(size, 0.0);
-
-    let geometry = DrawGeometry::new()
-        .line_segment(&top, &below)
-        .line_segment(&left, &right)
-        .circle(&crosshair_pos, size * 0.75);
-    let color = Color {
-        r: 0,
-        g: 255,
-        b: 0,
-        a: 128,
+use screen_overlay::egui::{Color32, pos2};
+use screen_overlay::{Drawable, Overlay, OverlayConfig, OverlayHandle, PositionedElements};
+pub fn main() -> std::result::Result<(), eframe::Error> {
+    let config = OverlayConfig {
+        width: 1920 * 2,
+        height: 1080,
     };
-    let stroke = Stroke { color, width: 2.0 };
+    let overlay = Overlay::new(config);
+    let overlay = OverlayHandle::new(overlay);
 
-    let _crosshair = window.draw_geometry(&geometry, &stroke, &Default::default())?;
-
-    Ok(screen_overlay::legacy::block_and_loop(setup_obj)?)
+    let cpos = pos2(1000.0, 500.0); // crosshair pos, but then short.
+    let len = egui::vec2(15.0, 0.0);
+    let color = Color32::ORANGE;
+    let _crosshair = overlay.add_drawable(Drawable::CentralElement(
+        PositionedElements::new()
+            .fixed_pos(egui::pos2(0.0, 0.0))
+            .default_size(egui::vec2(config.width as f32, config.height as f32))
+            // .debug_color()
+            .paint(vec![
+                egui::Shape::Circle(egui::epaint::CircleShape {
+                    center: cpos,
+                    radius: 10.0,
+                    fill: Color32::TRANSPARENT,
+                    stroke: egui::Stroke::new(1.5, color),
+                }),
+                egui::Shape::LineSegment {
+                    points: [cpos - len, cpos + len],
+                    stroke: egui::Stroke::new(2.0, color),
+                },
+                egui::Shape::LineSegment {
+                    points: [cpos - len.rot90(), cpos + len.rot90()],
+                    stroke: egui::Stroke::new(2.0, color),
+                },
+            ]),
+    ));
+    eframe::run_native(
+        "Image Viewer",
+        overlay.native_options(),
+        Box::new(|cc| {
+            // This gives us image support:
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(overlay))
+        }),
+    )
 }

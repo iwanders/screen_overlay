@@ -1,7 +1,9 @@
 /// The new system uses egui/eframe for a full screen overlay.
 pub mod legacy;
 
-use eframe::egui::{self, Color32, ViewportCommand};
+use egui::{Color32, ViewportCommand};
+
+pub use egui;
 
 #[derive(Debug, Clone, Copy)]
 pub struct OverlayConfig {
@@ -292,8 +294,12 @@ impl Overlay {
         let mut v = self.elements.write();
         v.remove(&visual);
     }
+
+    pub fn native_options(&self) -> eframe::NativeOptions {
+        fullscreen_overlay_native_options(&self.config)
+    }
     pub fn viewport_builder(&self) -> egui::ViewportBuilder {
-        fullscreen_overlay_native_options(&self.config).viewport
+        self.native_options().viewport
     }
 }
 
@@ -323,6 +329,9 @@ impl OverlayHandle {
     pub fn viewport_builder(&self) -> egui::ViewportBuilder {
         self.0.viewport_builder()
     }
+    pub fn native_options(&self) -> eframe::NativeOptions {
+        self.0.native_options()
+    }
 
     pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
         let overlay_copy = self.clone();
@@ -334,6 +343,16 @@ impl OverlayHandle {
                 overlay_copy.draw(ui);
             },
         );
+    }
+}
+
+impl eframe::App for OverlayHandle {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.configure(ui);
+        self.draw(ui);
+    }
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array()
     }
 }
 
