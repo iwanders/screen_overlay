@@ -26,10 +26,7 @@ impl eframe::App for TestOverlayApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let circle: Drawable = PositionedElements::new()
             .fixed_pos(egui::pos2(0.0, 0.0))
-            .default_size(egui::vec2(
-                self.config.width as f32,
-                self.config.height as f32,
-            ))
+            .default_size(self.config.size)
             // .debug_color()
             .paint(vec![egui::Shape::Circle(egui::epaint::CircleShape {
                 center: egui::Pos2 { x: 50.0, y: 50.0 },
@@ -69,10 +66,7 @@ impl eframe::App for TestOverlayApp {
 pub fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
-    let config = OverlayConfig {
-        width: 100,
-        height: 100,
-    };
+    let config = OverlayConfig::new().with_size([100.0, 100.0]);
     eframe::run_native(
         "Image Viewer",
         if OVERLAY_IN_DEFERED {

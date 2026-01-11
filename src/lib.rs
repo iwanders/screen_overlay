@@ -47,7 +47,7 @@ impl OverlayConfig {
 }
 
 #[cfg(target_os = "linux")]
-fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
+pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(config.size) // Must be repeated in viewport configure.
@@ -67,7 +67,7 @@ fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOp
     }
 }
 #[cfg(target_os = "linux")]
-fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
+pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     ctx.set_pixels_per_point(1.0); // Can we do this, or does this affect the other window?
     // ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
     // ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
