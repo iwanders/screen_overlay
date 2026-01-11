@@ -44,14 +44,20 @@ pub struct OverlayConfig {
     pub central_panel_fill: Color32,
 }
 
-impl OverlayConfig {
-    /// Create a new overlay config at the top left corner of the screen. Default size is 100x100, modify this.
-    pub fn new() -> Self {
+impl Default for OverlayConfig {
+    fn default() -> Self {
         Self {
             position: Default::default(),
             size: [100.0, 100.0].into(),
             central_panel_fill: Color32::TRANSPARENT,
         }
+    }
+}
+
+impl OverlayConfig {
+    /// Create a new overlay config at the top left corner of the screen. Default size is 100x100, modify this.
+    pub fn new() -> Self {
+        Default::default()
     }
 
     /// Returns this overlay config with the size modified to be the argument.
@@ -136,6 +142,8 @@ pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig)
 /// An debug color that's more elegant than egui::DEBUG_COLLOR, this is dark grey and 50% transparent.
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
 
+/// Thread safe function that can draw a ui.
+pub type DrawUiFunction = dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync;
 /// This is a helper for drawing positioned ui elements.
 ///
 /// It holds a position and a size, and the provided elements are drawn into that area.
@@ -144,18 +152,23 @@ pub struct PositionedElements {
     fixed_pos: Pos2,
     default_size: Vec2,
     fill: Option<Color32>,
-    contents: Vec<Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>>,
+    contents: Vec<Box<DrawUiFunction>>,
 }
-
-impl PositionedElements {
-    /// Create a new positioned element in the top left corner with the default area size.
-    pub fn new() -> Self {
+impl Default for PositionedElements {
+    fn default() -> Self {
         Self {
             fixed_pos: Pos2::ZERO,
             default_size: Vec2::NAN, // makes it default to the style's default.
             fill: None,
             contents: Default::default(),
         }
+    }
+}
+
+impl PositionedElements {
+    /// Create a new positioned element in the top left corner with the default area size.
+    pub fn new() -> Self {
+        Default::default()
     }
     /// This specifies where the element is positioned.
     pub fn fixed_pos(mut self, fixed_pos: impl Into<Pos2>) -> Self {
@@ -185,7 +198,7 @@ impl PositionedElements {
     }
 
     /// Add a a lambda to this element.
-    pub fn add(
+    pub fn add_closure(
         mut self,
         ui_gen: impl Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync + 'static,
     ) -> Self {
@@ -194,10 +207,7 @@ impl PositionedElements {
     }
 
     /// Add a boxed lambda to this element.
-    pub fn add_dyn(
-        mut self,
-        ui_gen: Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>,
-    ) -> Self {
+    pub fn add_dyn(mut self, ui_gen: Box<DrawUiFunction>) -> Self {
         self.contents.push(ui_gen);
         self
     }
@@ -205,7 +215,7 @@ impl PositionedElements {
     /// Paint shapes to the screen, note that these are clipped to the area. Coordinates are in screen space points.
     pub fn paint<I: IntoIterator<Item = egui::Shape>>(self, items: I) -> Self {
         let shapes: Vec<egui::Shape> = items.into_iter().collect();
-        self.add(move |ui| {
+        self.add_closure(move |ui| {
             // Note painted contents are clipped to the default size space.
             let (mut _response, painter) =
                 ui.allocate_painter(ui.available_size_before_wrap(), egui::Sense::empty());
@@ -497,11 +507,11 @@ pub fn main_test() -> eframe::Result {
                 .fixed_pos(egui::pos2(300.0, 200.0))
                 .default_size(egui::vec2(150.0, 200.0))
                 .debug_color()
-                .add(move |ui| {
+                .add_closure(move |ui| {
                     let value = our_counter_draw.load(Ordering::Relaxed);
                     ui.label(format!("normal text {}", value));
                 })
-                .add(|ui| {
+                .add_closure(|ui| {
                     ui.label("ha-haaa it works!");
                 })
                 .into(),
@@ -511,7 +521,7 @@ pub fn main_test() -> eframe::Result {
             PositionedElements::new()
                 .fixed_pos(egui::pos2(500.0, 250.0))
                 .default_size(egui::vec2(850.0, 100.0))
-                .add(move |ui| {
+                .add_closure(move |ui| {
                     let value = our_counter_draw2.load(Ordering::Relaxed);
                     let ratio = (value % 10) as f32 / 10.0;
 
@@ -568,7 +578,7 @@ pub fn main_test() -> eframe::Result {
             PositionedElements::new()
                 .fixed_pos(egui::pos2(900.0, 300.0))
                 .default_size(egui::vec2(235.0 * 1.1, 140.0 * 1.1)) // Should scale up and be a bit blurry.
-                .add(|ui| {
+                .add_closure(|ui| {
                     // Adding the image like this scales to this size.
                     ui.image(egui::include_image!("../examples/crosshair_image.png"));
                 }),
@@ -578,7 +588,7 @@ pub fn main_test() -> eframe::Result {
                 .fixed_pos(egui::pos2(1300.0, 300.0))
                 .default_size(egui::vec2(535.0, 240.0)) // Adding the image like this scales to this size.
                 // .debug_color() // toggle this to see that this doesn't cover the entire area.
-                .add(|ui| {
+                .add_closure(|ui| {
                     // THis way the image should be crisp.
                     ui.add(
                         egui::Image::new(egui::include_image!("../examples/crosshair_image.png"))
