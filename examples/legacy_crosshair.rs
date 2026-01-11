@@ -1,5 +1,10 @@
+#[cfg(not(feature = "legacy"))]
+pub fn main() {}
+
+#[cfg(feature = "legacy")]
 use screen_overlay::legacy::{Color, DrawGeometry, Error, Overlay, OverlayConfig, Point, Stroke};
 
+#[cfg(feature = "legacy")]
 pub fn main() -> std::result::Result<(), Error> {
     let setup_obj = screen_overlay::legacy::setup()?;
     let window = Overlay::new_with_config(&OverlayConfig {

@@ -1,4 +1,6 @@
 /// The new system uses egui/eframe for a full screen overlay.
+
+#[cfg(feature = "legacy")]
 pub mod legacy;
 
 use egui::{Color32, ViewportCommand};

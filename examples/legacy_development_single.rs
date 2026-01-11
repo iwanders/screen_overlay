@@ -1,3 +1,7 @@
+#[cfg(not(feature = "legacy"))]
+pub fn main() {}
+
+#[cfg(feature = "legacy")]
 use screen_overlay::legacy::{
     // CapStyle, CircleDirection, GeometryElement, LineJoin,
     Color,
@@ -14,6 +18,7 @@ use screen_overlay::legacy::{
     TextProperties,
 };
 
+#[cfg(feature = "legacy")]
 pub fn main() -> std::result::Result<(), Error> {
     let v = screen_overlay::legacy::setup()?;
     let window = Overlay::new_with_config(&OverlayConfig {
