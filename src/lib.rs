@@ -7,17 +7,51 @@ use egui::{Color32, ViewportCommand};
 
 pub use egui;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct OverlayConfig {
-    pub width: u32,
-    pub height: u32,
+    /// The size to use for the overlay.
+    ///
+    /// Elements are shrunk to fit into this.
+    pub size: Vec2,
+
+    /// The position at which to draw the overlay.
+    ///
+    /// This denotes the top left corner and is the relative anchor for all other positioning.
+    pub position: Pos2,
+
+    /// The fill color for the central panel that holds PositionedElements.
+    ///
+    /// This can be helpful to set to [crate::DEBUG_COLOR] to understand positioning and size.
+    pub central_panel_fill: Color32,
+}
+impl OverlayConfig {
+    pub fn new() -> Self {
+        Self {
+            position: Default::default(),
+            size: [100.0, 100.0].into(),
+            central_panel_fill: Color32::TRANSPARENT,
+        }
+    }
+    pub fn with_size(mut self, size: impl Into<Vec2>) -> Self {
+        self.size = size.into();
+        self
+    }
+    pub fn with_position(mut self, position: impl Into<Pos2>) -> Self {
+        self.position = position.into();
+        self
+    }
+    pub fn with_central_panel_fill(mut self, color: impl Into<Color32>) -> Self {
+        self.central_panel_fill = color.into();
+        self
+    }
 }
 
 #[cfg(target_os = "linux")]
 fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([config.width as f32, config.height as f32]) // Must be repeated in viewport configure.
+            .with_inner_size(config.size) // Must be repeated in viewport configure.
+            .with_position(config.position)
             // .with_resizable(false)
             // .with_fullscreen(true)
             // .with_maximized(true)
@@ -35,9 +69,8 @@ fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOp
 #[cfg(target_os = "linux")]
 fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     ctx.set_pixels_per_point(1.0); // Can we do this, or does this affect the other window?
-    ctx.send_viewport_cmd(ViewportCommand::InnerSize(
-        (config.width as f32, config.height as f32).into(),
-    ));
+    // ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
+    // ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
     ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
 }
@@ -271,7 +304,7 @@ impl Overlay {
         }
         // Then, create the central panel for the remaining elements
         egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(Color32::TRANSPARENT))
+            .frame(egui::Frame::default().fill(self.config.central_panel_fill))
             .show_inside(ui, |ui| {
                 for (_k, v) in z.iter() {
                     if matches!(v, Drawable::CentralElement(_)) {
@@ -358,12 +391,12 @@ impl eframe::App for OverlayHandle {
     }
 }
 
+#[allow(unused_variables)]
 pub fn main_test() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
-    let config = OverlayConfig {
-        width: 1920 * 2,
-        height: 1080,
-    };
+    let config = OverlayConfig::new()
+        .with_size([1920.0 * 0.5, 1080.0 * 0.5])
+        .with_position([100.0, 100.0]);
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
@@ -431,14 +464,10 @@ pub fn main_test() -> eframe::Result {
 
         let cpos = pos2(1000.0, 500.0); // crosshair pos, but then short.
         let len = egui::vec2(15.0, 0.0);
-        println!(
-            "config.width as f32 * 0.5237: {}",
-            config.width as f32 * 0.5237
-        );
         let crosshair = overlay.add_drawable(Drawable::CentralElement(
             PositionedElements::new()
                 .fixed_pos(egui::pos2(0.0, 0.0))
-                .default_size(egui::vec2(config.width as f32, config.height as f32))
+                .default_size(config.size)
                 // .debug_color()
                 .paint(vec![
                     egui::Shape::Circle(egui::epaint::CircleShape {

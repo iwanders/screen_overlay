@@ -1,10 +1,7 @@
 use screen_overlay::egui::{Color32, pos2};
 use screen_overlay::{Drawable, Overlay, OverlayConfig, OverlayHandle, PositionedElements};
 pub fn main() -> std::result::Result<(), eframe::Error> {
-    let config = OverlayConfig {
-        width: 1920 * 2,
-        height: 1080,
-    };
+    let config = OverlayConfig::new().with_size([1920.0 * 0.5, 1080.0]);
     let overlay = Overlay::new(config);
     let overlay = OverlayHandle::new(overlay);
 
@@ -14,7 +11,7 @@ pub fn main() -> std::result::Result<(), eframe::Error> {
     let _crosshair = overlay.add_drawable(Drawable::CentralElement(
         PositionedElements::new()
             .fixed_pos(egui::pos2(0.0, 0.0))
-            .default_size(egui::vec2(config.width as f32, config.height as f32))
+            .default_size(config.size)
             // .debug_color()
             .paint(vec![
                 egui::Shape::Circle(egui::epaint::CircleShape {
