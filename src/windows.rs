@@ -26,7 +26,7 @@ use windows::{
     - There's currently a bug when main window changes between monitors, the overlay freezes?
 */
 
-use crate::{
+use crate::legacy::{
     CapStyle, CircleDirection, Color, DashStyle, DrawGeometry, GeometryElement, LineJoin,
     LineStyle, OverlayConfig, Point, Rect, Stroke, TextAlignment, TextProperties,
 };
@@ -152,7 +152,7 @@ pub struct OverlayImpl {
 // Is this legal?
 unsafe impl Send for OverlayImpl {}
 
-pub fn run_msg_loop() -> Result<()> {
+pub fn run_msg_loop(wrapper: ()) -> Result<()> {
     unsafe {
         let mut message = MSG::default();
         while GetMessageA(&mut message, HWND::default(), 0, 0).into() {
