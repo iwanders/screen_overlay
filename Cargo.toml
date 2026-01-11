@@ -36,6 +36,9 @@ eframe = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832
 egui = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8"}
 egui_extras = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8",  features=["image"]}
 
+[dev-dependencies]
+clap = { version = "4.5.54", features = ["derive"] }
+
 [features]
 legacy = ["dep:x11-dl", "dep:x11-dl", "dep:glfw", "dep:gl", "dep:three-d", "dep:windows"]
 

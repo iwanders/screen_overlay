@@ -14,6 +14,9 @@
 //! The [`OverlayHandle`] does implement [`eframe::App`], which is useful in simple use cases where the overlay is the
 //! only element drawn.
 //!
+//! On Windows, there's a known [issue](https://github.com/emilk/egui/issues/3632#issuecomment-3733528750) around the
+//! non-primary windows transparency support.
+//!
 
 /// Legacy module using dxgi and raw x11/glfw/three_d.
 #[cfg(feature = "legacy")]
@@ -103,8 +106,9 @@ pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::Nati
 pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     let _ = config;
     ctx.set_pixels_per_point(1.0); // Can we do this, or does this affect the other window?
-    // ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
-    // ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
+    // These size & position are necessary for larger windows that appear to be clamped on initial creation.
+    ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
+    ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
     ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
 }
