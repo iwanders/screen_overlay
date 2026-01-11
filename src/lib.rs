@@ -1,12 +1,31 @@
-/// The new system uses egui/eframe for a full screen overlay.
+//! The new system uses egui/eframe for a full screen overlay.
+//!
+//! Any interaction with the [`Overlay`] is thread safe.
+//! Adding elements to the [`OverlayHandle`] returns a [`VisualHandle`], if that is dropped the visual element will be
+//! removed from the overlay.
+//! Interacting directly with the [`Overlay`] is a bit more low level and returns [`VisualId`] objects that need to be
+//! manually removed.
+//!
+//! In general you want to interact with [`OverlayHandle`]  as that can clone the pointer for passing
+//! it to the deferred viewport function call. You create the overlay, put it in a handle, you pass the handle around
+//! to the places that need access to the overlay to add [`Drawable`]'s and from your [`eframe::App::ui`] method the
+//! [`OverlayHandle::show_viewport_deferred`] method is called to draw the overlay.
+//!
+//! The [`OverlayHandle`] does implement [`eframe::App`], which is useful in simple use cases where the overlay is the
+//! only element drawn.
+//!
 
+/// Legacy module using dxgi and raw x11/glfw/three_d.
 #[cfg(feature = "legacy")]
 pub mod legacy;
 
-use egui::{Color32, ViewportCommand};
+use egui::{Color32, Pos2, Stroke, Vec2, ViewportCommand, pos2};
+use parking_lot::RwLock;
+use std::sync::atomic::Ordering;
 
 pub use egui;
 
+/// Configuration for the overlay.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct OverlayConfig {
     /// The size to use for the overlay.
@@ -24,7 +43,9 @@ pub struct OverlayConfig {
     /// This can be helpful to set to [crate::DEBUG_COLOR] to understand positioning and size.
     pub central_panel_fill: Color32,
 }
+
 impl OverlayConfig {
+    /// Create a new overlay config at the top left corner of the screen. Default size is 100x100, modify this.
     pub fn new() -> Self {
         Self {
             position: Default::default(),
@@ -32,20 +53,25 @@ impl OverlayConfig {
             central_panel_fill: Color32::TRANSPARENT,
         }
     }
+
+    /// Returns this overlay config with the size modified to be the argument.
     pub fn with_size(mut self, size: impl Into<Vec2>) -> Self {
         self.size = size.into();
         self
     }
+    /// Returns this overlay config with the position modified to be the argument.
     pub fn with_position(mut self, position: impl Into<Pos2>) -> Self {
         self.position = position.into();
         self
     }
+    /// Returns this overlay config with the central panel color modified to be the argument.
     pub fn with_central_panel_fill(mut self, color: impl Into<Color32>) -> Self {
         self.central_panel_fill = color.into();
         self
     }
 }
 
+/// Returns the NativeOptions to create the window on linux.
 #[cfg(target_os = "linux")]
 pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
@@ -66,8 +92,10 @@ pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::Nati
         ..Default::default()
     }
 }
+/// Sends the appropriate viewport commands to configure the overlay on linux.
 #[cfg(target_os = "linux")]
 pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
+    let _ = config;
     ctx.set_pixels_per_point(1.0); // Can we do this, or does this affect the other window?
     // ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
     // ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
@@ -75,6 +103,7 @@ pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig)
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
 }
 
+/// Returns the NativeOptions to create the window on windows.
 #[cfg(target_os = "windows")]
 pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
@@ -95,32 +124,17 @@ pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::Nati
         ..Default::default()
     }
 }
+/// Sends the appropriate viewport commands to configure the overlay on windows.
 #[cfg(target_os = "windows")]
 pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
-    // do nothing?
-    ctx.send_viewport_cmd(ViewportCommand::InnerSize(
-        (config.width as f32, config.height as f32).into(),
-    ));
+    ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
     ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
     ctx.send_viewport_cmd(ViewportCommand::Transparent(true));
 }
 
+/// An debug color that's more elegant than egui::DEBUG_COLLOR, this is dark grey and 50% transparent.
 pub const DEBUG_COLOR: Color32 = egui::Color32::from_rgba_unmultiplied_const(10, 10, 10, 128);
-
-use egui::{Pos2, Stroke, Vec2, pos2};
-use parking_lot::RwLock;
-use std::sync::atomic::Ordering;
-/*
- containers have Container.show(ui, |ui|{}), but they do consume Container.
- widgets have:  fn ui(self, ui: &mut Ui) -> Response;
-
- Should our generalised function just be ui(&self, ui: &mut Ui)?
-
- It is a bit convenient if we draw the centralpanel first in the overlay...
-    Remember we can have multiple threads, independently of each other adding to the overlay... without being able to
-    communicate to each other well... should we do a 'tree' in the naming?
-*/
 
 /// This is a helper for drawing positioned ui elements.
 ///
@@ -212,11 +226,14 @@ impl PositionedElements {
 // Or even just a fixed window?
 // https://docs.rs/egui/0.33.3/egui/index.html#auto-sizing-panels-and-windows
 
-/// A drawable.
+/// A drawable that can be added to the overlay. Usually created from [`PositionedElements`].
+///
+/// First all [`Drawable::Draw`] entities are drawn, then the central panel is created and [`Drawable::CentralElement`]
+/// drawables are drawn.
 pub enum Drawable {
-    /// Draw goes first, it can do anything on the ui, including adding things like panels.
+    /// These drawables can do anything, including allocating and populating containers like panels.
     Draw(Box<dyn Fn(&mut egui::Ui) + std::marker::Send + std::marker::Sync>),
-    /// Then the central panel gets created and the central elements are drawn.
+    /// After the [`Drawable::Draw`] elements, a central panel gets created and in that the [`PositionedElements`]'s are drawn.
     CentralElement(PositionedElements),
 }
 
@@ -225,7 +242,9 @@ impl From<PositionedElements> for Drawable {
         Drawable::CentralElement(elements)
     }
 }
+
 impl Drawable {
+    /// Draw the drawable on the UI.
     pub fn draw(&self, ui: &mut egui::Ui) {
         match self {
             Drawable::Draw(drawable) => {
@@ -279,9 +298,13 @@ impl std::fmt::Debug for Drawable {
     }
 }
 
+/// Id for a particular visual held by the overlay.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct VisualId(usize);
 
+/// RAII visual handle that keeps a [`Drawable`] alive in the overlay.
+///
+/// If this goes out of scope [`Overlay::remove_element`] is called for it.
 #[must_use]
 #[derive(Debug)]
 pub struct VisualHandle {
@@ -294,6 +317,7 @@ impl Drop for VisualHandle {
     }
 }
 
+/// The overlay, this keeps a thread-safe map of visuals to draw each frame.
 #[derive(Debug)]
 pub struct Overlay {
     style: egui::Style,
@@ -303,6 +327,7 @@ pub struct Overlay {
 }
 
 impl Overlay {
+    /// Create a new overlay using the provided configuration.
     pub fn new(config: OverlayConfig) -> Self {
         let mut style = egui::Style::default();
 
@@ -322,7 +347,9 @@ impl Overlay {
             config,
         }
     }
-    fn draw(&self, ui: &mut egui::Ui) {
+
+    /// Draw the overlay onto a ui.
+    pub fn draw(&self, ui: &mut egui::Ui) {
         // Apply the overlay style.
         (*ui.style_mut()) = self.style.clone();
 
@@ -345,37 +372,47 @@ impl Overlay {
             });
     }
 
+    /// Configure the viewport to draw the overlay.
     pub fn configure(&self, ui: &mut egui::Ui) {
         let ctx = ui.ctx();
         fullscreen_overlay_configure(ctx, &self.config);
     }
 
+    /// Add a drawable element to the overlay.
     pub fn add_element(&self, drawable: Drawable) -> VisualId {
         let index = VisualId(self.counter.fetch_add(1, Ordering::Relaxed));
         let mut v = self.elements.write();
         v.insert(index, drawable);
         index
     }
-    fn remove_element(&self, visual: VisualId) {
+
+    /// Add an element by its id from the overlay.
+    pub fn remove_element(&self, visual: VisualId) {
         let mut v = self.elements.write();
         v.remove(&visual);
     }
 
+    /// Return the native options for this overlay.
     pub fn native_options(&self) -> eframe::NativeOptions {
         fullscreen_overlay_native_options(&self.config)
     }
+
+    /// Return the viewport options for this overlay.
     pub fn viewport_builder(&self) -> egui::ViewportBuilder {
         self.native_options().viewport
     }
 }
 
+/// The handle holds a pointer to an [`Overlay`] as well as some convenience functions.
 #[derive(Debug, Clone)]
 pub struct OverlayHandle(std::sync::Arc<Overlay>);
 
 impl OverlayHandle {
+    /// Create a new overlay handle.
     pub fn new(overlay: Overlay) -> OverlayHandle {
         OverlayHandle(overlay.into())
     }
+    /// Add a drawable to the overlay and return a RAII [`VisualHandle`].
     pub fn add_drawable(&self, drawable: Drawable) -> VisualHandle {
         let id = self.0.add_element(drawable);
         VisualHandle {
@@ -384,21 +421,28 @@ impl OverlayHandle {
         }
     }
 
+    /// Passthrough to [`Overlay::configure`].
     pub fn configure(&self, ui: &mut egui::Ui) {
         self.0.configure(ui);
     }
 
+    /// Passthrough to [`Overlay::draw`].
     pub fn draw(&self, ui: &mut egui::Ui) {
         self.0.draw(ui)
     }
 
+    /// Passthrough to [`Overlay::viewport_builder`].
     pub fn viewport_builder(&self) -> egui::ViewportBuilder {
         self.0.viewport_builder()
     }
+    /// Passthrough to [`Overlay::native_options`].
     pub fn native_options(&self) -> eframe::NativeOptions {
         self.0.native_options()
     }
 
+    /// Shows the overlay in a deferred viewport, this is the function to call from the [`eframe::App::ui`] method.
+    ///
+    /// This is the main entry point you likely want to call to draw the overlay.
     pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
         let overlay_copy = self.clone();
         ui.ctx().show_viewport_deferred(
@@ -422,6 +466,7 @@ impl eframe::App for OverlayHandle {
     }
 }
 
+/// This is a development main function... mostly such that it's in the same file for development convenience.
 #[allow(unused_variables)]
 pub fn main_test() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -570,6 +615,7 @@ pub fn main_test() -> eframe::Result {
     )
 }
 
+// used by main test.
 struct TestOverlayApp {
     overlay: OverlayHandle,
 }
