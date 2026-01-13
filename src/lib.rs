@@ -505,6 +505,7 @@ pub fn main_test() -> eframe::Result {
         let our_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let our_counter_draw = our_counter.clone();
         let our_counter_draw2 = our_counter.clone();
+        let our_counter_draw3 = our_counter.clone();
 
         let token2 = overlay.add_drawable(
             PositionedElements::new()
@@ -517,6 +518,23 @@ pub fn main_test() -> eframe::Result {
                 })
                 .add_closure(|ui| {
                     ui.label("ha-haaa it works!");
+                })
+                .into(),
+        );
+
+        let big_text = overlay.add_drawable(
+            PositionedElements::new()
+                .fixed_pos(egui::pos2(100.0, 300.0))
+                .default_size(egui::vec2(150.0, 200.0))
+                // .debug_color()
+                .add_closure(move |ui| {
+                    let value = our_counter_draw3.load(Ordering::Relaxed);
+                    let text =
+                        egui::widget_text::RichText::new(format!("Big text {}", value)).size(30.0);
+                    ui.label(text);
+                })
+                .add_closure(|ui| {
+                    ui.label("ha-haaa it works! 🎉");
                 })
                 .into(),
         );
