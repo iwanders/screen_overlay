@@ -434,6 +434,22 @@ impl OverlayHandle {
     pub fn new(overlay: Overlay) -> OverlayHandle {
         OverlayHandle(overlay.into())
     }
+
+    /// Create a handle from a weak pointer.
+    pub fn from_weak(weak: std::sync::Weak<Overlay>) -> Option<Self> {
+        weak.upgrade().map(Self::from_ptr)
+    }
+
+    /// Create a weak pointer from this handle's strong pointer.
+    pub fn to_weak(&self) -> std::sync::Weak<Overlay> {
+        std::sync::Arc::<Overlay>::downgrade(&self.0)
+    }
+
+    /// Create a handle from a strong pointer.
+    pub fn from_ptr(overlay: std::sync::Arc<Overlay>) -> Self {
+        OverlayHandle(overlay)
+    }
+
     /// Add a drawable to the overlay and return a RAII [`VisualHandle`].
     pub fn add_drawable(&self, drawable: Drawable) -> VisualHandle {
         let id = self.0.add_element(drawable);
