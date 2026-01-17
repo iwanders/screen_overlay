@@ -487,6 +487,17 @@ impl OverlayHandle {
     /// Shows the overlay in a deferred viewport, this is the function to call from the [`eframe::App::ui`] method.
     ///
     /// This is the main entry point you likely want to call to draw the overlay.
+    ///
+    /// **NOTE**: If you use this to integrate with
+    /// an existing application, it is paramount to ensure it clears with a transparent color, use this in the
+    /// [`eframe::App`] implementation:
+    /// ```ignore
+    /// fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+    ///    egui::Rgba::TRANSPARENT.to_array()
+    /// }
+    /// ```
+    /// If this is missing, the overlay will always have a dark gray semi-transparent background regardless of the
+    /// fill color specified.
     pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
         let overlay_copy = self.clone();
         ui.ctx().show_viewport_deferred(
