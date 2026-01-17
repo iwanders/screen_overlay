@@ -28,8 +28,10 @@ use std::sync::atomic::Ordering;
 
 pub use egui;
 
+use serde::{Deserialize, Serialize};
+
 /// Configuration for the overlay.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct OverlayConfig {
     /// The size to use for the overlay.
     ///
@@ -313,7 +315,7 @@ impl std::fmt::Debug for Drawable {
 }
 
 /// Id for a particular visual held by the overlay.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub struct VisualId(usize);
 
 /// RAII visual handle that keeps a [`Drawable`] alive in the overlay.
@@ -420,6 +422,12 @@ impl Overlay {
 /// The handle holds a pointer to an [`Overlay`] as well as some convenience functions.
 #[derive(Debug, Clone)]
 pub struct OverlayHandle(std::sync::Arc<Overlay>);
+
+impl std::cmp::PartialEq for OverlayHandle {
+    fn eq(&self, other: &OverlayHandle) -> bool {
+        std::sync::Arc::as_ptr(&self.0) == std::sync::Arc::as_ptr(&other.0)
+    }
+}
 
 impl OverlayHandle {
     /// Create a new overlay handle.
