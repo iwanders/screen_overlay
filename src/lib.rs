@@ -176,6 +176,19 @@ impl Default for PositionedElements {
         }
     }
 }
+impl std::hash::Hash for PositionedElements {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fixed_pos[0].to_bits().hash(state);
+        self.fixed_pos[1].to_bits().hash(state);
+        self.default_size[0].to_bits().hash(state);
+        self.default_size[1].to_bits().hash(state);
+        self.fill.hash(state);
+        for z in self.contents.iter() {
+            let raw: *const DrawUiFunction = &*z;
+            raw.hash(state);
+        }
+    }
+}
 
 impl PositionedElements {
     /// Create a new positioned element in the top left corner with the default area size.
@@ -278,7 +291,7 @@ impl Drawable {
                 // central panel in that area to ensure it gets the appropriate size
 
                 // Generate the id and consume it.
-                let id = ui.next_auto_id();
+                let id = ui.next_auto_id().with(elements);
                 ui.skip_ahead_auto_ids(1);
                 egui::Area::new(id)
                     .fixed_pos(elements.fixed_pos)
