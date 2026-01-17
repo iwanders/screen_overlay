@@ -35,7 +35,7 @@ impl eframe::App for TestOverlayApp {
                 stroke: egui::Stroke::new(1.5, Color32::RED),
             })])
             .into();
-        let config = self.config;
+        let config = self.config.clone();
 
         if OVERLAY_IN_DEFERED {
             ui.ctx().show_viewport_deferred(

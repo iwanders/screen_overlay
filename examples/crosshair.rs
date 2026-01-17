@@ -2,7 +2,7 @@ use screen_overlay::egui::{Color32, pos2};
 use screen_overlay::{Drawable, Overlay, OverlayConfig, OverlayHandle, PositionedElements};
 pub fn main() -> std::result::Result<(), eframe::Error> {
     let config = OverlayConfig::new().with_size([1920.0, 1080.0]);
-    let overlay = Overlay::new(config);
+    let overlay = Overlay::new(config.clone());
     let overlay = OverlayHandle::new(overlay);
 
     let cpos = pos2(1000.0, 500.0); // crosshair pos, but then short.

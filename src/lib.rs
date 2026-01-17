@@ -31,7 +31,7 @@ pub use egui;
 use serde::{Deserialize, Serialize};
 
 /// Configuration for the overlay.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct OverlayConfig {
     /// The size to use for the overlay.
     ///
@@ -47,6 +47,11 @@ pub struct OverlayConfig {
     ///
     /// This can be helpful to set to [crate::DEBUG_COLOR] to understand positioning and size.
     pub central_panel_fill: Color32,
+
+    /// The id assigned to this viewport.
+    ///
+    /// If this is unique, the old overlay created may persist indefinitely?
+    pub viewport_id: String,
 }
 
 impl Default for OverlayConfig {
@@ -55,6 +60,7 @@ impl Default for OverlayConfig {
             position: Default::default(),
             size: [100.0, 100.0].into(),
             central_panel_fill: Color32::TRANSPARENT,
+            viewport_id: "overlay".to_owned(),
         }
     }
 }
@@ -484,7 +490,7 @@ impl OverlayHandle {
     pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
         let overlay_copy = self.clone();
         ui.ctx().show_viewport_deferred(
-            egui::ViewportId::from_hash_of("deferred_viewport"),
+            egui::ViewportId::from_hash_of(&self.0.config.viewport_id),
             self.viewport_builder(),
             move |ui, _class| {
                 overlay_copy.configure(ui);
@@ -514,7 +520,7 @@ pub fn main_test() -> eframe::Result {
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
-    let overlay = Overlay::new(config);
+    let overlay = Overlay::new(config.clone());
     let overlay = OverlayHandle::new(overlay);
     let overlay_for_runner = overlay.clone();
     let handle = std::thread::spawn(move || {
