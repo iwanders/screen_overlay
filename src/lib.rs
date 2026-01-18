@@ -126,13 +126,14 @@ pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig)
 pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([config.width as f32, config.height as f32]) // Must be repeated in viewport configure.
+            .with_inner_size(config.size) // Must be repeated in viewport configure.
+            .with_position(config.position)
             .with_resizable(false)
             .with_fullscreen(true)
             .with_maximized(true)
             .with_transparent(true)
             .with_taskbar(false)
-            // .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
+            .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
             .with_always_on_top()
             .with_decorations(false)
             //.with_position(egui::pos2(-1920.0, 0.0)) // for left monitor.
@@ -146,6 +147,7 @@ pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::Nati
 #[cfg(target_os = "windows")]
 pub fn fullscreen_overlay_configure(ctx: &egui::Context, config: &OverlayConfig) {
     ctx.send_viewport_cmd(ViewportCommand::InnerSize(config.size));
+    ctx.send_viewport_cmd(ViewportCommand::OuterPosition(config.position));
     ctx.send_viewport_cmd(ViewportCommand::MousePassthrough(true));
     ctx.send_viewport_cmd(ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
     ctx.send_viewport_cmd(ViewportCommand::Transparent(true));
@@ -689,7 +691,7 @@ pub fn main_test() -> eframe::Result {
             .with_inner_size([200.0, 100.0]),
         ..Default::default()
     };
-    // let options = fullscreen_overlay_native_options(&config);
+    let options = fullscreen_overlay_native_options(&config);
     eframe::run_native(
         "Image Viewer",
         options,

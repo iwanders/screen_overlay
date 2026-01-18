@@ -32,9 +32,15 @@ env_logger = "0.11.8"
 #
 
 # Own fork for with_override_redirect
-eframe = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8", features=["glow"]}
-egui = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8", features=["serde"]}
-egui_extras = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8",  features=["image"]}
+#eframe = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8", features=["glow"]}
+#egui = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8", features=["serde"]}
+#egui_extras = {git="https://github.com/emilk/egui.git", rev="f714380b66a44dac9a3a1832df45aaf8760c29b8",  features=["image"]}
+
+# Patch for https://github.com/emilk/egui/issues/3632#issuecomment-3733528750
+eframe = { git = 'https://github.com/emilk/egui.git', rev="606a659c95440b54229796e94a0038472dee61f8", features=["glow"]  }
+egui = { git = 'https://github.com/emilk/egui.git', rev="606a659c95440b54229796e94a0038472dee61f8", features=["serde"]}
+egui_extras = {git="https://github.com/emilk/egui.git", rev="606a659c95440b54229796e94a0038472dee61f8",  features=["image"]}
+
 
 [dev-dependencies]
 clap = { version = "4.5.54", features = ["derive"] }
