@@ -429,6 +429,12 @@ impl Overlay {
         v.remove(&visual);
     }
 
+    /// Remove all elements from the overlay.
+    pub fn remove_all_elements(&self) {
+        let mut v = self.elements.write();
+        v.clear();
+    }
+
     /// Return the native options for this overlay.
     pub fn native_options(&self) -> eframe::NativeOptions {
         fullscreen_overlay_native_options(&self.config)
@@ -478,6 +484,11 @@ impl OverlayHandle {
             visual: id,
             overlay: self.0.clone(),
         }
+    }
+
+    /// Remove all elements from the overlay.
+    pub fn remove_all_elements(&self) {
+        self.0.remove_all_elements();
     }
 
     /// Passthrough to [`Overlay::configure`].
@@ -681,6 +692,9 @@ pub fn main_test() -> eframe::Result {
             our_counter.fetch_add(1, Ordering::Relaxed);
             // if i > 10 {
             //     break;
+            // }
+            // if i > 50 {
+            //     overlay.remove_all_elements();
             // }
         }
     });
