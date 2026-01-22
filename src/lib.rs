@@ -336,21 +336,59 @@ impl std::fmt::Debug for Drawable {
 }
 
 /// Id for a particular visual held by the overlay.
+///
+/// Usually you don't interact with these directly, but instead use the RAII [`VisualHandle`].
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub struct VisualId(usize);
+impl VisualId {
+    /// Construct an id from thin air.
+    pub fn from_usize(v: usize) -> Self {
+        Self(v)
+    }
+
+    /// Convert this id to an usize.
+    pub fn to_usize(&self) -> usize {
+        self.0
+    }
+}
 
 /// RAII visual handle that keeps a [`Drawable`] alive in the overlay.
 ///
-/// If this goes out of scope [`Overlay::remove_element`] is called for it.
+/// If this goes out of scope [`Overlay::remove_element`] is called for it. It can be converted into a raw [`VisualId`]
+/// by using the [`VisualHandle::into_id`] method, this prevents the RAII removal.
 #[must_use]
 #[derive(Debug)]
 pub struct VisualHandle {
     visual: VisualId,
-    overlay: std::sync::Arc<Overlay>,
+    overlay: Option<std::sync::Arc<Overlay>>,
 }
+
+impl VisualHandle {
+    /// Prevent the RAII removal, use [`into_id`] for the public way.
+    fn disarm(&mut self) {
+        self.overlay = None;
+    }
+
+    /// Consume this handle and return its id.
+    pub fn into_id(mut self) -> VisualId {
+        self.disarm();
+        self.visual
+    }
+
+    /// Create a visual handle from an id and overlay.
+    pub fn from_parts(visual: VisualId, overlay: std::sync::Arc<Overlay>) -> Self {
+        Self {
+            visual,
+            overlay: Some(overlay),
+        }
+    }
+}
+
 impl Drop for VisualHandle {
     fn drop(&mut self) {
-        self.overlay.remove_element(self.visual);
+        if let Some(overlay) = self.overlay.as_ref() {
+            overlay.remove_element(self.visual);
+        }
     }
 }
 
@@ -477,13 +515,15 @@ impl OverlayHandle {
         OverlayHandle(overlay)
     }
 
+    /// Access to the internal pointer.
+    pub fn as_ptr(&self) -> &std::sync::Arc<Overlay> {
+        &self.0
+    }
+
     /// Add a drawable to the overlay and return a RAII [`VisualHandle`].
     pub fn add_drawable(&self, drawable: Drawable) -> VisualHandle {
         let id = self.0.add_element(drawable);
-        VisualHandle {
-            visual: id,
-            overlay: self.0.clone(),
-        }
+        VisualHandle::from_parts(id, self.0.clone())
     }
 
     /// Remove all elements from the overlay.
@@ -672,19 +712,23 @@ pub fn main_test() -> eframe::Result {
                     ui.image(egui::include_image!("../examples/crosshair_image.png"));
                 }),
         ));
-        let image_on_screen2 = overlay.add_drawable(Drawable::CentralElement(
-            PositionedElements::new()
-                .fixed_pos(egui::pos2(1300.0, 300.0))
-                .default_size(egui::vec2(535.0, 240.0)) // Adding the image like this scales to this size.
-                // .debug_color() // toggle this to see that this doesn't cover the entire area.
-                .add_closure(|ui| {
-                    // THis way the image should be crisp.
-                    ui.add(
-                        egui::Image::new(egui::include_image!("../examples/crosshair_image.png"))
+        let image_on_screen2 = Some(
+            overlay.add_drawable(Drawable::CentralElement(
+                PositionedElements::new()
+                    .fixed_pos(egui::pos2(1300.0, 300.0))
+                    .default_size(egui::vec2(535.0, 240.0)) // Adding the image like this scales to this size.
+                    // .debug_color() // toggle this to see that this doesn't cover the entire area.
+                    .add_closure(|ui| {
+                        // THis way the image should be crisp.
+                        ui.add(
+                            egui::Image::new(egui::include_image!(
+                                "../examples/crosshair_image.png"
+                            ))
                             .fit_to_original_size(1.0), // prevents scaling to fit the size.
-                    );
-                }),
-        ));
+                        );
+                    }),
+            )),
+        );
 
         for i in 0..10000 {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -695,6 +739,12 @@ pub fn main_test() -> eframe::Result {
             // }
             // if i > 50 {
             //     overlay.remove_all_elements();
+            // }
+            //
+            // if i > 10 {
+            //     if let Some(visualhandle) = image_on_screen2.take() {
+            //         let _ = visualhandle.into_id();
+            //     }
             // }
         }
     });
