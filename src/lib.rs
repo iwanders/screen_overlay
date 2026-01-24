@@ -185,10 +185,11 @@ impl std::hash::Hash for PositionedElements {
         self.default_size[0].to_bits().hash(state);
         self.default_size[1].to_bits().hash(state);
         self.fill.hash(state);
-        for z in self.contents.iter() {
-            let raw: *const DrawUiFunction = &*z;
-            raw.hash(state);
-        }
+        // Deliberately not adding the draw function, because then the id changes if the callback changes.
+        // for z in self.contents.iter() {
+        //     let raw: *const DrawUiFunction = &*z;
+        //     raw.hash(state);
+        // }
     }
 }
 
