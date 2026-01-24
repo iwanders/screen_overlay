@@ -398,7 +398,7 @@ pub struct Overlay {
     style: egui::Style,
     counter: std::sync::atomic::AtomicUsize,
     elements: RwLock<std::collections::HashMap<VisualId, Drawable>>,
-    config: OverlayConfig,
+    config: RwLock<OverlayConfig>,
 }
 
 impl Overlay {
@@ -419,7 +419,7 @@ impl Overlay {
             style,
             counter: 0.into(),
             elements: Default::default(),
-            config,
+            config: config.into(),
         }
     }
 
@@ -427,6 +427,7 @@ impl Overlay {
     pub fn draw(&self, ui: &mut egui::Ui) {
         // Apply the overlay style.
         (*ui.style_mut()) = self.style.clone();
+        let central_panel_fill = self.config.read().central_panel_fill;
 
         let z = self.elements.read();
         // First, draw the raw drawables, that may add panels, and do whatever they want.
@@ -437,7 +438,7 @@ impl Overlay {
         }
         // Then, create the central panel for the remaining elements
         egui::CentralPanel::default()
-            .frame(egui::Frame::default().fill(self.config.central_panel_fill))
+            .frame(egui::Frame::default().fill(central_panel_fill))
             .show_inside(ui, |ui| {
                 for (_k, v) in z.iter() {
                     if matches!(v, Drawable::CentralElement(_)) {
@@ -450,7 +451,13 @@ impl Overlay {
     /// Configure the viewport to draw the overlay.
     pub fn configure(&self, ui: &mut egui::Ui) {
         let ctx = ui.ctx();
-        fullscreen_overlay_configure(ctx, &self.config);
+        let config = self.config.read();
+        fullscreen_overlay_configure(ctx, &config);
+    }
+
+    /// Set the configuration.
+    pub fn set_config(&self, config: &OverlayConfig) {
+        *self.config.write() = config.clone();
     }
 
     /// Add a drawable element to the overlay.
@@ -475,7 +482,8 @@ impl Overlay {
 
     /// Return the native options for this overlay.
     pub fn native_options(&self) -> eframe::NativeOptions {
-        fullscreen_overlay_native_options(&self.config)
+        let config = self.config.read();
+        fullscreen_overlay_native_options(&config)
     }
 
     /// Return the viewport options for this overlay.
@@ -541,6 +549,11 @@ impl OverlayHandle {
         self.0.configure(ui);
     }
 
+    /// Update the configuration inside the overlay object.
+    pub fn set_config(&self, config: &OverlayConfig) {
+        self.0.set_config(config);
+    }
+
     /// Passthrough to [`Overlay::draw`].
     pub fn draw(&self, ui: &mut egui::Ui) {
         self.0.draw(ui)
@@ -571,8 +584,9 @@ impl OverlayHandle {
     /// fill color specified.
     pub fn show_viewport_deferred(&self, ui: &mut egui::Ui) {
         let overlay_copy = self.clone();
+        let viewport_id = self.0.config.read().viewport_id.clone();
         ui.ctx().show_viewport_deferred(
-            egui::ViewportId::from_hash_of(&self.0.config.viewport_id),
+            egui::ViewportId::from_hash_of(&viewport_id),
             self.viewport_builder(),
             move |ui, _class| {
                 overlay_copy.configure(ui);
@@ -598,7 +612,8 @@ pub fn main_test() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let config = OverlayConfig::new()
         .with_size([1920.0 * 0.5, 1080.0 * 0.5])
-        .with_position([100.0, 100.0]);
+        .with_position([100.0, 100.0])
+        .with_central_panel_fill(DEBUG_COLOR);
 
     println!("DEBUG_COLOR: {DEBUG_COLOR:?}");
 
