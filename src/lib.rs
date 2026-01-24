@@ -133,7 +133,9 @@ pub fn fullscreen_overlay_native_options(config: &OverlayConfig) -> eframe::Nati
             .with_maximized(true)
             .with_transparent(true)
             .with_taskbar(false)
-            .with_mouse_passthrough(true) // This doesn't actually work, but setting the viewportcommand later does.
+            // Setting this at the start makes the window completely hidden with the betula overlay daemon.
+            // But we can apply it in the overlay configure without problems.
+            // .with_mouse_passthrough(true)
             .with_always_on_top()
             .with_decorations(false)
             //.with_position(egui::pos2(-1920.0, 0.0)) // for left monitor.
