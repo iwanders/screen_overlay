@@ -531,6 +531,11 @@ impl OverlayHandle {
         self.0.remove_all_elements();
     }
 
+    /// Remove a specific visual id.
+    pub fn remove_element(&self, visual: VisualId) {
+        self.0.remove_element(visual);
+    }
+
     /// Passthrough to [`Overlay::configure`].
     pub fn configure(&self, ui: &mut egui::Ui) {
         self.0.configure(ui);
